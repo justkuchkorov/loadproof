@@ -14,6 +14,7 @@ const PUSHES = [
 const PUSH_TIME = 0.6
 const SETTLE_TIME = 1.2
 const PARK_TIME = 1.5 // first the hand moves away and everything goes still; nothing may touch the load
+const SLOW = 0.3      // slow motion during the pushes, so you can watch the load tilt
 const inBuildArea = (p) => p[0] > 0.12 && p[0] < 0.42 && Math.abs(p[1]) < 0.26
 
 export function createTruckTest({ mujoco, model, data, scene, log }) {
@@ -67,5 +68,12 @@ export function createTruckTest({ mujoco, model, data, scene, log }) {
     return false
   }
 
-  return { start, tick, get running() { return !!run }, cancel() { run = null; model.opt.gravity.set(normal); arrow.visible = false } }
+  return {
+    start, tick,
+    get running() { return !!run },
+    get timeScale() { return run && run.step >= 0 ? SLOW : 1 },
+    // What is happening now, for the banner and the shake: null, or { name, accel, pushing }
+    get phase() { return run && run.step >= 0 ? { name: PUSHES[run.step]?.name, accel: run.accel, pushing: run.t < PUSH_TIME, dir: PUSHES[run.step]?.dir } : null },
+    cancel() { run = null; model.opt.gravity.set(normal); arrow.visible = false },
+  }
 }

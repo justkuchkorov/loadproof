@@ -87,7 +87,7 @@ export async function createSim(container) {
     renderer.render(scene, camera)
   }
 
-  return { mujoco, model, data, scene, step, render }
+  return { mujoco, model, data, scene, camera, step, render }
 }
 
 function buildMeshes(mujoco, model, scene) {

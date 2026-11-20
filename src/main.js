@@ -92,6 +92,7 @@ async function main() {
     const request = ask.value.trim()
     if (!request || agentBusy) return
     agentBusy = true
+    parked = false
     buildButton.disabled = true
     logEl.innerHTML = ''
     log('you', `“${request}”`)
@@ -115,9 +116,11 @@ async function main() {
   truckButton.onclick = () => {
     if (agentBusy || truck.running) return
     logEl.innerHTML = ''
-    truck.start(0.5)
+    if (truck.start(0.5)) parked = true
   }
   const safe = [0.18 - offset[0], 0 - offset[1], 0.4 - offset[2]] // hand parked high during the test
+  let parked = false // after a truck test the hand stays parked until you use it (camera) or build
+  const banner = document.getElementById('banner')
 
   window.addEventListener('keydown', (e) => {
     if (e.target === ask) return
@@ -166,19 +169,27 @@ async function main() {
       xy = reach.goal(hand.image)
     }
 
+    let simDt = dt
     if (truck.running) {
-      // 2c. Truck test: hand parked high and open, gravity tilted by the test.
-      truck.tick(dt)
-      for (let k = 0; k < 3; k++) { move[k] += 0.04 * (safe[k] - move[k]); data.mocap_pos[k] = move[k] }
+      // 2c. Truck test: hand parked high and open, gravity tilted by the test, slow motion during the pushes.
+      simDt = dt * truck.timeScale
+      truck.tick(simDt)
+      for (let k = 0; k < 3; k++) { move[k] += 0.15 * (safe[k] - move[k]); data.mocap_pos[k] = move[k] }
       for (let i = 0; i < model.nu; i++) data.ctrl[i] = 0
       ring.visible = false
       status.textContent = '🚚 Truck test running…'
+    } else if (parked && !hand) {
+      // After a truck test: stay parked, do not come down onto whatever fell.
+      for (let k = 0; k < 3; k++) { move[k] += 0.15 * (safe[k] - move[k]); data.mocap_pos[k] = move[k] }
+      for (let i = 0; i < model.nu; i++) data.ctrl[i] = 0
+      ring.visible = false
     } else if (agentBusy) {
       // 2a. The agent is building: the robot's own skills drive the hand.
       robot.tick(dt)
       ring.visible = false
       status.textContent = `The robot is building · press Stop to take over`
     } else {
+      parked = false
       // 2b. Shared control: you choose where and when, the robot does the precise part.
       const current = [0, 1, 2].map((k) => data.site_xpos[3 * graspSite + k])
       if (!tracker) xy = [current[0], current[1]] // no camera: stay put
@@ -200,7 +211,15 @@ async function main() {
       }
     }
 
-    sim.step(dt)
+    const phase = truck.phase
+    banner.style.display = phase ? 'block' : 'none'
+    if (phase) banner.textContent = phase.pushing ? `🚚 ${phase.name === 'brake' ? 'BRAKING' : 'SWERVING'} · ${phase.accel} g · slow motion` : '🚚 settling…'
+    if (phase?.pushing) { // the whole world shakes a little, like the truck bed
+      const a = 0.004 * Math.sin(now / 18)
+      sim.scene.position.set(phase.dir[0] * a, phase.dir[1] * a, 0.0015 * Math.sin(now / 11))
+    } else sim.scene.position.set(0, 0, 0)
+
+    sim.step(simDt)
     sim.render()
     requestAnimationFrame(frame)
   }
