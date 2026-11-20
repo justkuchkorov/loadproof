@@ -3,9 +3,10 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import loadMujoco from '@mujoco/mujoco'
 
+const SCENE = 'shadow_hand/scene_pick.xml'
 const HAND_FILES = [
-  'shadow_hand/scene.xml',
-  'shadow_hand/right_hand.xml',
+  SCENE,
+  'shadow_hand/hand_free.xml',
   ...['f_distal_pst', 'f_knuckle', 'f_middle', 'f_proximal', 'forearm_0', 'forearm_1',
     'forearm_collision', 'lf_metacarpal', 'mounting_plate', 'palm', 'th_distal_pst',
     'th_middle', 'th_proximal', 'wrist'].map((n) => `shadow_hand/assets/${n}.obj`),
@@ -28,7 +29,7 @@ export async function createSim(container) {
     mujoco.FS.writeFile(`/working/${file}`, bytes)
   }
 
-  const model = mujoco.MjModel.from_xml_path('/working/shadow_hand/scene.xml')
+  const model = mujoco.MjModel.from_xml_path(`/working/${SCENE}`)
   const data = new mujoco.MjData(model)
   mujoco.mj_forward(model, data)
 
@@ -42,9 +43,9 @@ export async function createSim(container) {
 
   const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.01, 50)
   camera.up.set(0, 0, 1)
-  camera.position.set(0.15, -0.55, 0.3)
+  camera.position.set(-0.2, -0.12, 0.62) // high behind the hand, so your left/right is the robot's left/right
   const controls = new OrbitControls(camera, renderer.domElement)
-  controls.target.set(0.3, 0, 0)
+  controls.target.set(0.22, 0, 0)
   controls.update()
 
   scene.add(new THREE.AmbientLight(0xffffff, 0.6))

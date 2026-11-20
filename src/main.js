@@ -1,10 +1,12 @@
 import { createSim } from './sim.js'
 import { createTracker } from './tracking.js'
 import { retarget } from './retarget.js'
+import { createReach } from './reach.js'
 
 const status = document.getElementById('status')
 const startButton = document.getElementById('start')
-const SMOOTH = 0.5 // 0 = frozen, 1 = no smoothing
+const SMOOTH = 0.5 // fingers: 0 = frozen, 1 = no smoothing
+const SMOOTH_MOVE = 0.3 // hand position
 
 async function main() {
   const sim = await createSim(document.getElementById('view'))
@@ -19,8 +21,24 @@ async function main() {
   const range = model.actuator_ctrlrange
   const target = new Float64Array(model.nu)
 
+  // The hand follows an invisible "mocap" target. Keep the grasp point (in the palm) where your hand points.
+  const graspSite = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE.value, 'grasp_site')
+  const offset = [0, 1, 2].map((k) => data.site_xpos[3 * graspSite + k] - data.mocap_pos[k])
+  const move = Array.from(data.mocap_pos.subarray(0, 3))
+  const reach = createReach()
+  let lastHand = null
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'c' && lastHand) reach.calibrate(lastHand.image)
+    if (e.key === 'r') {
+      mujoco.mj_resetData(model, data)
+      for (let k = 0; k < 3; k++) data.mocap_pos[k] = move[k]
+      mujoco.mj_forward(model, data)
+    }
+  })
+
   let tracker = null
-  status.textContent = 'Ready. Press "Start camera" and show your right hand.'
+  status.textContent = 'Ready. Press "Start camera" and show your right hand. C = recentre, R = reset objects.'
 
   startButton.onclick = async () => {
     startButton.disabled = true
@@ -51,11 +69,15 @@ async function main() {
         const clamped = Math.max(range[2 * i], Math.min(range[2 * i + 1], value))
         target[i] += SMOOTH * (clamped - target[i])
       }
-      status.textContent = `Tracking your ${hand.handedness.toLowerCase()} hand`
+      lastHand = hand
+      const goal = reach.goal(hand.image)
+      for (let k = 0; k < 3; k++) move[k] += SMOOTH_MOVE * (goal[k] - offset[k] - move[k])
+      status.textContent = `Tracking your ${hand.handedness.toLowerCase()} hand · C = recentre · R = reset objects`
     } else if (tracker) {
       status.textContent = 'No hand in view'
     }
     for (let i = 0; i < model.nu; i++) data.ctrl[i] = target[i]
+    for (let k = 0; k < 3; k++) data.mocap_pos[k] = move[k]
 
     sim.step(dt)
     sim.render()
