@@ -3,9 +3,8 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import loadMujoco from '@mujoco/mujoco'
 
-const SCENE = 'shadow_hand/scene_build.xml'
+const SCENE = 'shadow_hand/scene_generated.xml'
 const HAND_FILES = [
-  SCENE,
   'shadow_hand/hand_free.xml',
   ...['f_distal_pst', 'f_knuckle', 'f_middle', 'f_proximal', 'forearm_0', 'forearm_1',
     'forearm_collision', 'lf_metacarpal', 'mounting_plate', 'palm', 'th_distal_pst',
@@ -14,7 +13,7 @@ const HAND_FILES = [
 
 const COLLISION_GROUP = 3
 
-export async function createSim(container) {
+export async function createSim(container, { xml, labels = {} } = {}) {
   const mujoco = await loadMujoco()
 
   // Copy the model files into MuJoCo's in-memory file system.
@@ -29,6 +28,7 @@ export async function createSim(container) {
     mujoco.FS.writeFile(`/working/${file}`, bytes)
   }
 
+  mujoco.FS.writeFile(`/working/${SCENE}`, xml)
   const model = mujoco.MjModel.from_xml_path(`/working/${SCENE}`)
   const data = new mujoco.MjData(model)
   mujoco.mj_forward(model, data)
@@ -56,7 +56,7 @@ export async function createSim(container) {
   fill.position.set(-0.5, 0.6, 0.4)
   scene.add(fill)
 
-  const meshes = buildMeshes(mujoco, model, scene)
+  const meshes = buildMeshes(mujoco, model, scene, labels)
 
   window.addEventListener('resize', () => {
     camera.aspect = container.clientWidth / container.clientHeight
@@ -90,7 +90,7 @@ export async function createSim(container) {
   return { mujoco, model, data, scene, camera, step, render }
 }
 
-function buildMeshes(mujoco, model, scene) {
+function buildMeshes(mujoco, model, scene, labels) {
   const T = mujoco.mjtGeom
   const out = []
   for (let g = 0; g < model.ngeom; g++) {
@@ -109,8 +109,10 @@ function buildMeshes(mujoco, model, scene) {
 
     const matId = model.geom_matid[g]
     const rgba = matId >= 0 ? model.mat_rgba.subarray(4 * matId, 4 * matId + 4) : model.geom_rgba.subarray(4 * g, 4 * g + 4)
+    const name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM.value, g)
     const material = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(rgba[0], rgba[1], rgba[2]),
+      map: labels[name] ? labelTexture(labels[name], rgba) : null,
+      color: labels[name] ? 0xffffff : new THREE.Color(rgba[0], rgba[1], rgba[2]),
       roughness: 0.55,
       metalness: 0.1,
       transparent: rgba[3] < 1,
@@ -134,4 +136,21 @@ function meshGeometry(model, meshId) {
   geometry.setIndex(Array.from(model.mesh_face.subarray(3 * fAdr, 3 * (fAdr + fNum))))
   geometry.computeVertexNormals()
   return geometry
+}
+
+// A cardboard-coloured texture with the box's printed label (name, weight, FRAGILE).
+function labelTexture({ title, kg, fragile }, rgba) {
+  const c = document.createElement('canvas')
+  c.width = 256; c.height = 256
+  const ctx = c.getContext('2d')
+  ctx.fillStyle = `rgb(${rgba[0] * 255}, ${rgba[1] * 255}, ${rgba[2] * 255})`
+  ctx.fillRect(0, 0, 256, 256)
+  ctx.strokeStyle = 'rgba(60, 40, 20, 0.5)'; ctx.lineWidth = 6; ctx.strokeRect(3, 3, 250, 250)
+  ctx.fillStyle = '#2b1d0e'; ctx.textAlign = 'center'
+  ctx.font = 'bold 54px system-ui, sans-serif'; ctx.fillText(title, 128, 92)
+  ctx.font = 'bold 64px system-ui, sans-serif'; ctx.fillText(`${kg} kg`, 128, 168)
+  if (fragile) { ctx.fillStyle = '#b42318'; ctx.font = 'bold 40px system-ui, sans-serif'; ctx.fillText('FRAGILE', 128, 226) }
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.SRGBColorSpace
+  return t
 }

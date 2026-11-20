@@ -1,4 +1,5 @@
-<!-- right_hand.xml from mujoco_menagerie (Apache 2.0) with one change: the forearm is free to move, so a mocap target can carry it. -->
+<!-- right_hand.xml from mujoco_menagerie (Apache 2.0) with two changes: the forearm is free to move, so a mocap target can carry it;
+     and the forearm stub does not collide (in a real cell an arm carries the hand from above; only the hand touches boxes). -->
 <mujoco model="right_shadow_hand_free">
   <compiler angle="radian" meshdir="assets" autolimits="true"/>
 
@@ -100,9 +101,9 @@
       <inertial mass="3" pos="0 0 0.09" diaginertia="0.0138 0.0138 0.00744"/>
       <geom class="plastic_visual" mesh="forearm_0" material="gray"/>
       <geom class="plastic_visual" mesh="forearm_1"/>
-      <geom class="plastic_collision" type="mesh" mesh="forearm_collision"/>
+      <geom class="plastic_collision" type="mesh" mesh="forearm_collision" contype="0" conaffinity="0"/>
       <geom class="plastic_collision" size="0.035 0.035 0.035" pos="0.01 0.0 0.181" quat="0.380188 0.924909 0 0"
-        type="box"/>
+        type="box" contype="0" conaffinity="0"/>
       <body name="rh_wrist" pos="0.01 0 0.21301" quat="1 0 0 1">
         <inertial mass="0.1" pos="0 0 0.029" quat="0.5 0.5 0.5 0.5" diaginertia="6.4e-05 4.38e-05 3.5e-05"/>
         <joint class="wrist_y" name="rh_WRJ2"/>

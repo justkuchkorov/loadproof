@@ -5,6 +5,7 @@
 // so the test tilts MuJoCo's gravity for 0.6 s per push, then lets everything settle.
 import * as THREE from 'three'
 import { BLOCKS } from './planner.js'
+import { PALLET } from './pallet.js'
 
 const G = 9.81
 const PUSHES = [
@@ -15,14 +16,14 @@ const PUSH_TIME = 0.6
 const SETTLE_TIME = 1.2
 const PARK_TIME = 1.5 // first the hand moves away and everything goes still; nothing may touch the load
 const SLOW = 0.3      // slow motion during the pushes, so you can watch the load tilt
-const inBuildArea = (p) => p[0] > 0.12 && p[0] < 0.42 && Math.abs(p[1]) < 0.26
+const inBuildArea = (p) => Math.abs(p[0] - PALLET.x) < 0.12 && Math.abs(p[1] - PALLET.y) < 0.14 // on or near the pallet
 
 export function createTruckTest({ mujoco, model, data, scene, log }) {
   const body = (n) => mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, n)
   const P = (n) => { const b = body(n); return [0, 1, 2].map((k) => data.xpos[3 * b + k]) }
   const normal = Array.from(model.opt.gravity)
 
-  const arrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0.25, 0, 0.2), 0.16, 0xf85149, 0.05, 0.035)
+  const arrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(PALLET.x, PALLET.y, 0.26), 0.16, 0xf85149, 0.05, 0.035)
   arrow.visible = false
   scene.add(arrow)
 
@@ -30,7 +31,7 @@ export function createTruckTest({ mujoco, model, data, scene, log }) {
 
   function start(accel = 0.5) {
     const names = Object.keys(BLOCKS).filter((n) => inBuildArea(P(n)))
-    if (names.length === 0) { log('fail', 'Truck test: nothing in the build area to test'); return false }
+    if (names.length === 0) { log('fail', 'Truck test: nothing on the pallet to test'); return false }
     const height = Math.max(...names.map((n) => P(n)[2] + BLOCKS[n].size[2] / 2))
     run = { t: 0, step: -1, before: null, names, height, accel }
     log('step', `🚚 Truck test at ${accel} g: hand away, then ${PUSHES.map((p) => p.name).join(', then ')} (load ${(height * 100).toFixed(1)} cm tall)`)

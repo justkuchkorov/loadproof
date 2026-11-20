@@ -1,49 +1,78 @@
-// The AI designer (Gemini) and the two checks every design must pass before the hand touches a block:
-// 1. rule check (does every block rest on something?)  2. physics check (put the blocks there and let MuJoCo run).
+// LoadProof's planner (Gemini) and the checks every pallet plan must pass before the hand touches a box:
+// 1. warehouse rules  2. it stands (physics)  3. the 0.5 g truck test (physics, after EUMOS 40509).
+import { ORDER, PALLET, size, kind, SPOTS } from './pallet.js'
 
 const KEY = import.meta.env?.VITE_GEMINI_API_KEY ?? globalThis.GEMINI_KEY // the page reads .env.local; Node tests set GEMINI_KEY
 const MODELS = ['gemini-3.5-flash-lite', 'gemini-3.8-flash'] // fast first; the stronger one if the fast one keeps failing
 
-export const BLOCKS = {
-  cube1: { size: [0.05, 0.05, 0.05], name: 'red cube' },
-  cube2: { size: [0.05, 0.05, 0.05], name: 'blue cube' },
-  cube3: { size: [0.05, 0.05, 0.05], name: 'green cube' },
-  cube4: { size: [0.05, 0.05, 0.05], name: 'yellow cube' },
-  plank: { size: [0.04, 0.16, 0.04], name: 'purple beam' },
+// The boxes of the current order, by id: { size: [x, y, z] metres, name, kg, fragile }.
+export const BLOCKS = {}
+export function setOrder(order) {
+  for (const k of Object.keys(BLOCKS)) delete BLOCKS[k]
+  for (const b of order) BLOCKS[b.id] = { size: size(b), name: `${b.label} ${b.kg} kg${b.fragile ? ' (fragile)' : ''}`, kg: b.kg, fragile: b.fragile, kind: kind(b) }
+}
+setOrder(ORDER)
+
+const area = { x0: PALLET.x - PALLET.sx / 2, x1: PALLET.x + PALLET.sx / 2, y0: PALLET.y - PALLET.sy / 2, y1: PALLET.y + PALLET.sy / 2 }
+
+function systemPrompt() {
+  const list = Object.entries(BLOCKS).map(([id, b]) => `- ${id}: ${b.name}, ${b.kind} box, ${(b.size[2] * 500).toFixed(0)} cm tall (real)`).join('\n')
+  return `You plan how a robot stacks the boxes of one order onto a half-EUR pallet (60 x 80 cm), in layers.
+Boxes (use every box exactly once; they cannot be turned):
+${list}
+The pallet has 4 spots per layer: near-left, near-right, far-left, far-right.
+- A small box fills ONE spot: say "near-left", "near-right", "far-left" or "far-right".
+- A wide box fills the near AND far spot of one side: say "left column" or "right column".
+- A long box fills the left AND right spot of one row: say "near row" or "far row".
+Give every box a layer number (1 = on the pallet) and a spot. Within a layer, spots must not overlap.
+Rules:
+1. Every box must stand on boxes below it (the layer below must be filled under it).
+2. A box never rests on one that is much lighter (more than 1.5 times lighter). Nothing rests on a fragile box.
+3. The load must survive a truck braking or swerving at 0.5 g (EU test EUMOS 40509). What survives: full, even layers;
+   heavy boxes low; layers that interlock (a layer of long boxes crossing a layer of wide boxes). What falls: tall
+   separate columns, half-empty layers with boxes on top, uneven layers under other boxes.
+List the boxes in build order, layer 1 first. Give the plan a short name and tell the user in one sentence why it is stable.`
 }
 
-const SYSTEM = `You design block structures that a robot hand will build on a table. Units: metres. Table top is z=0.
-Build area: x from 0.16 to 0.36 (forward), y from -0.20 to 0.20 (left/right). Stay inside it.
-Blocks you may use (each at most once; you do not have to use all):
-- cube1 (red), cube2 (blue), cube3 (green), cube4 (yellow): cubes 0.05 wide. On the table z=0.025; on a cube z=0.075; on two cubes z=0.125.
-- plank (purple): a beam 0.04 (x) by 0.16 (y) by 0.04 (z), long side along y, it cannot be turned.
-  Its centre z = (top of what it rests on) + 0.02. Lying on the table: z=0.02.
-Rules: every block rests on the table or fully on blocks below it (same x and y for a cube on a cube).
-The plank needs two supports, one under each end: support centres 0.10 to 0.13 apart in y, same x as the plank.
-Leave at least 0.06 between separate stacks. List blocks in build order, lowest first.
-Name the structure and tell the user in one short sentence what you built.`
-
-const SCHEMA = {
+const SPOT_NAMES = [...new Set(Object.values(SPOTS).flatMap((s) => Object.keys(s)))]
+const SCHEMA = () => ({
   type: 'OBJECT',
   properties: {
     name: { type: 'STRING' },
-    blocks: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+    boxes: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
       block: { type: 'STRING', enum: Object.keys(BLOCKS) },
-      x: { type: 'NUMBER' }, y: { type: 'NUMBER' }, z: { type: 'NUMBER' } },
-      required: ['block', 'x', 'y', 'z'] } },
+      layer: { type: 'INTEGER' },
+      spot: { type: 'STRING', enum: SPOT_NAMES } },
+      required: ['block', 'layer', 'spot'] } },
     say: { type: 'STRING' },
   },
-  required: ['name', 'blocks', 'say'],
+  required: ['name', 'boxes', 'say'],
+})
+
+// Turn the AI's layers and spots into positions. A spot that does not fit the box's kind is reported as a problem.
+export function toPositions(raw) {
+  const problems = []
+  const boxes = [...raw.boxes].sort((a, b) => a.layer - b.layer)
+  const blocks = []
+  for (const b of boxes) {
+    const box = BLOCKS[b.block]
+    if (!box) { problems.push(`unknown box ${b.block}`); continue }
+    const xy = SPOTS[box.kind][b.spot]
+    if (!xy) { problems.push(`${b.block} is a ${box.kind} box and cannot use spot "${b.spot}" (it can use: ${Object.keys(SPOTS[box.kind]).join(', ')})`); continue }
+    blocks.push({ block: b.block, x: xy[0], y: xy[1], z: 1, layer: b.layer, spot: b.spot })
+  }
+  return { plan: snapHeights({ name: raw.name, say: raw.say, blocks }), problems }
 }
 
 async function callGemini(model, contents, retries = 2) {
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY },
+    signal: AbortSignal.timeout(25000), // never hang the demo: give up after 25 s
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM }] },
+      systemInstruction: { parts: [{ text: systemPrompt() }] },
       contents,
-      generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA },
+      generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA() },
     }),
   })
   if ((res.status === 503 || res.status === 429) && retries > 0) { // busy: wait a moment and ask again
@@ -58,84 +87,101 @@ async function callGemini(model, contents, retries = 2) {
   return JSON.parse(d.candidates[0].content.parts.at(-1).text)
 }
 
-// Ask for a design. `feedback` = what was wrong with the last one, so the AI can fix it.
+// Ask for a plan. `feedback` = what was wrong with the last one, so the AI can fix it.
+// The fast model is asked SAMPLES times in parallel; the answers are checked against the rules at once and the best
+// one is kept (generate several, verify, keep the best). Each answer takes about a second.
+const SAMPLES = 3
 export async function design(request, previous, feedback, attempt) {
   const contents = [{ role: 'user', parts: [{ text: request }] }]
   if (previous) {
     contents.push({ role: 'model', parts: [{ text: JSON.stringify(previous) }] })
-    contents.push({ role: 'user', parts: [{ text: `That design has problems: ${feedback}. Fix them and send the whole design again.` }] })
+    contents.push({ role: 'user', parts: [{ text: `That plan failed: ${feedback}. Fix it and send the whole plan again.` }] })
   }
-  const model = MODELS[attempt >= 2 ? 1 : 0]
-  try {
-    return { plan: await callGemini(model, contents), model }
-  } catch (err) { // busy or failed: try the other model once
-    const other = MODELS.find((m) => m !== model)
-    return { plan: await callGemini(other, contents), model: other, note: `${model} failed (${err.message}), used ${other}` }
+  const model = MODELS[0]
+  const answers = (await Promise.allSettled(Array.from({ length: SAMPLES }, () => callGemini(model, contents))))
+    .filter((r) => r.status === 'fulfilled').map((r) => r.value)
+  if (answers.length === 0) {
+    const other = MODELS[1]
+    return { plan: await callGemini(other, contents), model: other, note: `${model} failed ${SAMPLES} times, used ${other}` }
   }
+  const scored = answers.map((raw) => { const { plan, problems } = toPositions(raw); return { raw, n: problems.length + checkRules(plan).length } })
+  scored.sort((x, y) => x.n - y.n)
+  return { plan: scored[0].raw, model, note: `asked ${SAMPLES} times in parallel, kept the best (rule problems: ${scored.map((s) => s.n).join(', ')})` }
 }
 
-// Snap every block's height to exactly where it would rest (on the table, or on the blocks under it).
+// Overlap area of two boxes seen from above.
+function overlap(a, b) {
+  const [ax, ay] = BLOCKS[a.block].size
+  const [bx, by] = BLOCKS[b.block].size
+  const ox = Math.min(a.x + ax / 2, b.x + bx / 2) - Math.max(a.x - ax / 2, b.x - bx / 2)
+  const oy = Math.min(a.y + ay / 2, b.y + by / 2) - Math.max(a.y - ay / 2, b.y - by / 2)
+  return ox > 0 && oy > 0 ? ox * oy : 0
+}
+const top = (b) => b.z + BLOCKS[b.block].size[2] / 2
+const bottom = (b) => b.z - BLOCKS[b.block].size[2] / 2
+
+// Snap every box's height to exactly where it would rest: on the pallet, or on the highest boxes under it.
 export function snapHeights(plan) {
   const placed = []
   for (const b of plan.blocks) {
-    const [sx, sy, sz] = BLOCKS[b.block]?.size ?? [0.05, 0.05, 0.05]
-    let rest = 0
-    for (const p of placed) {
-      const [px, py, pz] = BLOCKS[p.block].size
-      const top = p.z + pz / 2
-      const overlap = Math.abs(p.x - b.x) < (px + sx) / 2 - 0.005 && Math.abs(p.y - b.y) < (py + sy) / 2 - 0.005
-      if (overlap && top < b.z + 0.012) rest = Math.max(rest, top)
-    }
-    b.z = rest + sz / 2
+    if (!BLOCKS[b.block]) continue
+    let rest = PALLET.top
+    for (const p of placed) if (overlap(p, b) > 0 && top(p) < b.z + 0.012) rest = Math.max(rest, top(p))
+    b.z = rest + BLOCKS[b.block].size[2] / 2
     placed.push(b)
   }
   return plan
 }
 
-// Rule check: every block must sit on the table or on the blocks under it.
+// Warehouse rules. Returns a list of problems in plain words (empty = all good).
 export function checkRules(plan) {
   const problems = []
   const seen = new Set()
   const placed = []
   for (const b of plan.blocks) {
-    if (!BLOCKS[b.block]) { problems.push(`unknown block ${b.block}`); continue }
+    const box = BLOCKS[b.block]
+    if (!box) { problems.push(`unknown box ${b.block}`); continue }
     if (seen.has(b.block)) problems.push(`${b.block} is used twice`)
     seen.add(b.block)
-    if (b.x < 0.15 || b.x > 0.37 || b.y < -0.21 || b.y > 0.21) problems.push(`${b.block} is outside the build area`)
-    const half = BLOCKS[b.block].size[2] / 2
-    if (Math.abs(b.z - half) < 0.004) { placed.push(b); continue } // on the table
-    if (b.block === 'plank') {
-      const sup = placed.filter((p) => p.block.startsWith('cube') && Math.abs(p.x - b.x) < 0.015 &&
-        Math.abs(p.z + 0.025 + 0.02 - b.z) < 0.006 && Math.abs(p.y - b.y) > 0.04 && Math.abs(p.y - b.y) < 0.08)
-      if (new Set(sup.map((p) => p.y > b.y)).size < 2) problems.push(`the plank at x=${b.x.toFixed(2)}, y=${b.y.toFixed(2)} needs a cube under EACH end, at y≈${(b.y - 0.06).toFixed(2)} and y≈${(b.y + 0.06).toFixed(2)} with the same x and the same height — or leave the plank out`)
-    } else {
-      const under = placed.find((p) => Math.abs(p.x - b.x) < 0.01 && Math.abs(p.y - b.y) < 0.01 &&
-        Math.abs(p.z + BLOCKS[p.block].size[2] / 2 + half - b.z) < 0.004)
-      if (!under) problems.push(`${b.block} at z=${b.z.toFixed(3)} has nothing directly under it`)
+    const [sx, sy] = box.size
+    if (b.x - sx / 2 < area.x0 - 0.004 || b.x + sx / 2 > area.x1 + 0.004 || b.y - sy / 2 < area.y0 - 0.004 || b.y + sy / 2 > area.y1 + 0.004) {
+      problems.push(`${b.block} (${box.name}) hangs over the pallet edge`)
+    }
+    if (Math.abs(bottom(b) - PALLET.top) > 0.004) {
+      const under = placed.filter((p) => overlap(p, b) > 0 && Math.abs(top(p) - bottom(b)) < 0.004)
+      const supported = under.reduce((a, p) => a + overlap(p, b), 0) / (sx * sy)
+      if (supported < 0.7) problems.push(`${b.block} (${box.name}) is only ${Math.round(supported * 100)}% supported, needs 70%`)
+      for (const p of under) {
+        if (BLOCKS[p.block].fragile) problems.push(`${b.block} rests on fragile ${p.block} (${BLOCKS[p.block].name})`)
+        else if (box.kg > 1.5 * BLOCKS[p.block].kg) problems.push(`heavy ${b.block} (${box.name}) rests on much lighter ${p.block} (${BLOCKS[p.block].name})`)
+      }
     }
     placed.push(b)
   }
+  for (const id of Object.keys(BLOCKS)) if (!seen.has(id)) problems.push(`${id} (${BLOCKS[id].name}) is missing`)
   return problems
 }
 
-// Physics check: in a separate copy of the world, put every block straight at its spot, run 2 s, see what moved.
-export function checkPhysics(mujoco, model, plan) {
+// A fresh copy of the world with the plan's boxes placed straight at their spots and the hand far away.
+function worldWith(mujoco, model, plan) {
   const d = new mujoco.MjData(model)
+  const body = (n) => mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, n)
+  const qadr = (n) => model.jnt_qposadr[model.body_jntadr[body(n)]]
+  const fa = qadr('rh_forearm')
+  d.qpos[fa] = -0.8; d.qpos[fa + 2] = 0.6
+  d.mocap_pos.set([-0.8, 0, 0.6])
+  for (const b of plan.blocks) d.qpos.set([b.x, b.y, b.z, 1, 0, 0, 0], qadr(b.block))
+  mujoco.mj_forward(model, d)
+  return { d, pos: (n) => { const i = 3 * body(n); return [d.xpos[i], d.xpos[i + 1], d.xpos[i + 2]] } }
+}
+const run = (mujoco, model, d, sec) => { for (let i = 0; i < Math.round(sec / model.opt.timestep); i++) mujoco.mj_step(model, d) }
+
+// Physics check 1: does it stand? Place everything, run 2 s, see what moved.
+export function checkPhysics(mujoco, model, plan) {
+  const { d, pos } = worldWith(mujoco, model, plan)
   try {
-    const body = (n) => mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, n)
-    const qadr = (n) => model.jnt_qposadr[model.body_jntadr[body(n)]]
-    const fa = qadr('rh_forearm')
-    d.qpos[fa] = -0.8; d.qpos[fa + 2] = 0.6 // hand far away
-    d.mocap_pos.set([-0.8, 0, 0.6])
-    for (const b of plan.blocks) d.qpos.set([b.x, b.y, b.z, 1, 0, 0, 0], qadr(b.block))
-    mujoco.mj_forward(model, d)
-    const steps = Math.round(2 / model.opt.timestep)
-    for (let i = 0; i < steps; i++) mujoco.mj_step(model, d)
-    const moved = {}
-    for (const b of plan.blocks) {
-      const i = 3 * body(b.block)
-      moved[b.block] = Math.hypot(d.xpos[i] - b.x, d.xpos[i + 1] - b.y, d.xpos[i + 2] - b.z) * 1000
-    }
+    run(mujoco, model, d, 2)
+    const moved = Object.fromEntries(plan.blocks.map((b) => [b.block, Math.hypot(...pos(b.block).map((v, k) => v - [b.x, b.y, b.z][k])) * 1000]))
     const fell = Object.entries(moved).filter(([, mm]) => mm > 5).map(([n]) => n)
     return { stands: fell.length === 0, moved, fell }
   } finally {
@@ -143,33 +189,24 @@ export function checkPhysics(mujoco, model, plan) {
   }
 }
 
-// Transport test after EUMOS 40509: push the load at `g` (0.5 g = a truck braking or swerving) for 0.5 s in each
-// direction, then measure how far each block ended up from where it started. Pass: every block moved less than
-// 5% of the load's height, and nothing fell.
+// Physics check 2, the truck test after EUMOS 40509: push at `g` for 0.5 s in each of four directions.
+// Pass: every box moved less than 5% of the load's height.
+export const PUSH_DIRECTIONS = [['to the right', [0, -1]], ['to the left', [0, 1]], ['forward (braking)', [1, 0]], ['backward', [-1, 0]]]
 export function checkTransport(mujoco, model, plan, g = 0.5) {
-  const body = (n) => mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, n)
-  const qadr = (n) => model.jnt_qposadr[model.body_jntadr[body(n)]]
-  const height = Math.max(...plan.blocks.map((b) => b.z + BLOCKS[b.block].size[2] / 2))
+  const height = Math.max(...plan.blocks.map(top))
   const limit = 0.05 * height
   const gravity = Array.from(model.opt.gravity)
   const results = []
-  for (const [name, dir] of [['sideways', [0, 1]], ['other side', [0, -1]], ['braking', [1, 0]], ['speeding up', [-1, 0]]]) {
-    const d = new mujoco.MjData(model)
+  for (const [name, dir] of PUSH_DIRECTIONS) {
+    const { d, pos } = worldWith(mujoco, model, plan)
     try {
-      const fa = qadr('rh_forearm')
-      d.qpos[fa] = -0.8; d.qpos[fa + 2] = 0.6
-      d.mocap_pos.set([-0.8, 0, 0.6])
-      for (const b of plan.blocks) d.qpos.set([b.x, b.y, b.z, 1, 0, 0, 0], qadr(b.block))
-      mujoco.mj_forward(model, d)
-      const run = (sec) => { for (let i = 0; i < Math.round(sec / model.opt.timestep); i++) mujoco.mj_step(model, d) }
-      run(0.5)
-      const before = plan.blocks.map((b) => [0, 1, 2].map((k) => d.xpos[3 * body(b.block) + k]))
-      // In the load's own frame, a push at g looks like gravity tilted sideways.
-      model.opt.gravity.set([-dir[0] * g * 9.81, -dir[1] * g * 9.81, -9.81])
-      run(0.5)
+      run(mujoco, model, d, 0.5)
+      const before = plan.blocks.map((b) => pos(b.block))
+      model.opt.gravity.set([dir[0] * g * 9.81, dir[1] * g * 9.81, -9.81]) // inside the truck, the push feels like tilted gravity
+      run(mujoco, model, d, 0.5)
       model.opt.gravity.set(gravity)
-      run(1.0)
-      const moved = plan.blocks.map((b, i) => Math.hypot(...[0, 1, 2].map((k) => d.xpos[3 * body(b.block) + k] - before[i][k])))
+      run(mujoco, model, d, 1.0)
+      const moved = plan.blocks.map((b, i) => Math.hypot(...pos(b.block).map((v, k) => v - before[i][k])))
       const worst = Math.max(...moved)
       results.push({ name, worst, pass: worst < limit, block: plan.blocks[moved.indexOf(worst)].block })
     } finally {
