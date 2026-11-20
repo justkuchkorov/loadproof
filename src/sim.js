@@ -43,9 +43,9 @@ export async function createSim(container) {
 
   const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.01, 50)
   camera.up.set(0, 0, 1)
-  camera.position.set(-0.2, -0.12, 0.62) // high behind the hand, so your left/right is the robot's left/right
+  camera.position.set(-0.22, 0, 0.72) // high behind the table: screen up = forward, screen right = robot right
   const controls = new OrbitControls(camera, renderer.domElement)
-  controls.target.set(0.22, 0, 0)
+  controls.target.set(0.2, 0, 0)
   controls.update()
 
   scene.add(new THREE.AmbientLight(0xffffff, 0.6))
@@ -87,7 +87,7 @@ export async function createSim(container) {
     renderer.render(scene, camera)
   }
 
-  return { mujoco, model, data, step, render }
+  return { mujoco, model, data, scene, step, render }
 }
 
 function buildMeshes(mujoco, model, scene) {
