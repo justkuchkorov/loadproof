@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Robot Hand</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0f1720; color: #e6edf3; font: 14px system-ui, sans-serif; overflow: hidden; }
+    #view { position: fixed; inset: 0; }
+    #status { position: fixed; top: 12px; left: 12px; padding: 6px 10px; background: #0008; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <div id="view"></div>
+  <div id="status">Loading MuJoCo…</div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
