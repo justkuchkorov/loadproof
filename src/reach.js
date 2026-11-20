@@ -3,7 +3,7 @@
 // Your hand right/left in the picture -> robot right/left. Your hand up/down in the picture -> robot forward/back.
 // Height is not yours to control: the robot handles it (see grasp.js).
 
-const WORK = { x: [0.0, 0.42], y: [-0.3, 0.3] } // metres over the table
+const WORK = { x: [0.0, 0.42], y: [-0.38, 0.38] } // metres over the table (the supply blocks sit at y = ±0.33)
 const GAIN = 0.7                                // metres per full picture width
 const HOME = { x: 0.18, y: 0.0 }                // where the ring goes when your hand is at the calibrated spot
 

@@ -12,12 +12,39 @@
     #start:disabled { opacity: 0.6; cursor: default; }
     #camwrap { display: none; position: fixed; right: 12px; bottom: 12px; width: 320px; height: 240px; border-radius: 8px; overflow: hidden; border: 1px solid #30363d; transform: scaleX(-1); }
     #camwrap video, #camwrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+    #agent { position: fixed; left: 12px; bottom: 12px; width: min(420px, calc(100vw - 24px)); background: #0d1117e6; border: 1px solid #30363d; border-radius: 8px; padding: 10px; box-sizing: border-box; }
+    #agent .row { display: flex; gap: 6px; }
+    #ask { flex: 1; min-width: 0; padding: 8px 10px; font: inherit; color: inherit; background: #161b22; border: 1px solid #30363d; border-radius: 6px; }
+    #agent button { padding: 8px 12px; font: inherit; border: 0; border-radius: 6px; color: #fff; cursor: pointer; }
+    #build { background: #1f6feb; }
+    #build:disabled { opacity: 0.6; cursor: default; }
+    #stop { background: #30363d; }
+    #log { list-style: none; margin: 8px 0 0; padding: 0; max-height: 34vh; overflow-y: auto; font-size: 13px; line-height: 1.45; }
+    #log:empty { display: none; }
+    #log li { padding: 2px 0 2px 18px; position: relative; }
+    #log li::before { position: absolute; left: 0; }
+    #log .you { color: #e6edf3; font-weight: 600; }
+    #log .step::before { content: '›'; color: #8b949e; }
+    #log .info { color: #8b949e; }
+    #log .ok::before { content: '✓'; color: #3fb950; }
+    #log .fail { color: #ffa198; }
+    #log .fail::before { content: '✗'; color: #f85149; }
+    #log .done { color: #3fb950; font-weight: 600; }
+    #log .done::before { content: '★'; }
   </style>
 </head>
 <body>
   <div id="view"></div>
   <div id="status">Loading MuJoCo…</div>
   <button id="start">Start camera</button>
+  <div id="agent">
+    <div class="row">
+      <input id="ask" placeholder="What should I build? e.g. a bridge" autocomplete="off">
+      <button id="build">Build</button>
+      <button id="stop">Stop</button>
+    </div>
+    <ul id="log"></ul>
+  </div>
   <div id="camwrap">
     <video id="cam" playsinline muted></video>
     <canvas id="overlay"></canvas>

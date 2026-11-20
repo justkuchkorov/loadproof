@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import loadMujoco from '@mujoco/mujoco'
 
-const SCENE = 'shadow_hand/scene_pick.xml'
+const SCENE = 'shadow_hand/scene_build.xml'
 const HAND_FILES = [
   SCENE,
   'shadow_hand/hand_free.xml',

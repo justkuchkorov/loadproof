@@ -19,12 +19,13 @@
 
     <body name="hand_target" mocap="true" pos="-0.2 0 0.15" quat="1 0 1 0"/>
 
-    <!-- 5 cm cubes and a 16 x 4 x 4 cm beam (long side across, so the fingers close over its short side). -->
-    <body name="cube1" pos="0.08 -0.18 0.025"><freejoint/><geom class="block" type="box" size="0.025 0.025 0.025" rgba="0.85 0.25 0.2 1"/></body>
-    <body name="cube2" pos="0.08 -0.08 0.025"><freejoint/><geom class="block" type="box" size="0.025 0.025 0.025" rgba="0.2 0.45 0.85 1"/></body>
-    <body name="cube3" pos="0.08 0.08 0.025"><freejoint/><geom class="block" type="box" size="0.025 0.025 0.025" rgba="0.3 0.7 0.35 1"/></body>
-    <body name="cube4" pos="0.08 0.18 0.025"><freejoint/><geom class="block" type="box" size="0.025 0.025 0.025" rgba="0.9 0.75 0.2 1"/></body>
-    <body name="plank" pos="0.0 0 0.02"><freejoint/><geom class="block" type="box" size="0.02 0.08 0.02" rgba="0.6 0.4 0.8 1"/></body>
+    <!-- Supply blocks wait at the two sides; the build area is the middle (x 0.16 to 0.36, y -0.20 to 0.20),
+         so the forearm never passes over them. 5 cm cubes and a 16 x 4 x 4 cm beam (long side across). -->
+    <body name="cube1" pos="0.08 -0.33 0.025"><freejoint/><geom class="block" type="box" size="0.025 0.025 0.025" rgba="0.85 0.25 0.2 1"/></body>
+    <body name="cube2" pos="0.21 -0.33 0.025"><freejoint/><geom class="block" type="box" size="0.025 0.025 0.025" rgba="0.2 0.45 0.85 1"/></body>
+    <body name="cube3" pos="0.08 0.33 0.025"><freejoint/><geom class="block" type="box" size="0.025 0.025 0.025" rgba="0.3 0.7 0.35 1"/></body>
+    <body name="cube4" pos="0.21 0.33 0.025"><freejoint/><geom class="block" type="box" size="0.025 0.025 0.025" rgba="0.9 0.75 0.2 1"/></body>
+    <body name="plank" pos="0.36 -0.33 0.02"><freejoint/><geom class="block" type="box" size="0.02 0.08 0.02" rgba="0.6 0.4 0.8 1"/></body>
   </worldbody>
 
   <equality>
