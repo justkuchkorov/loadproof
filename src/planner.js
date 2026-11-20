@@ -142,3 +142,40 @@ export function checkPhysics(mujoco, model, plan) {
     d.delete()
   }
 }
+
+// Transport test after EUMOS 40509: push the load at `g` (0.5 g = a truck braking or swerving) for 0.5 s in each
+// direction, then measure how far each block ended up from where it started. Pass: every block moved less than
+// 5% of the load's height, and nothing fell.
+export function checkTransport(mujoco, model, plan, g = 0.5) {
+  const body = (n) => mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, n)
+  const qadr = (n) => model.jnt_qposadr[model.body_jntadr[body(n)]]
+  const height = Math.max(...plan.blocks.map((b) => b.z + BLOCKS[b.block].size[2] / 2))
+  const limit = 0.05 * height
+  const gravity = Array.from(model.opt.gravity)
+  const results = []
+  for (const [name, dir] of [['sideways', [0, 1]], ['other side', [0, -1]], ['braking', [1, 0]], ['speeding up', [-1, 0]]]) {
+    const d = new mujoco.MjData(model)
+    try {
+      const fa = qadr('rh_forearm')
+      d.qpos[fa] = -0.8; d.qpos[fa + 2] = 0.6
+      d.mocap_pos.set([-0.8, 0, 0.6])
+      for (const b of plan.blocks) d.qpos.set([b.x, b.y, b.z, 1, 0, 0, 0], qadr(b.block))
+      mujoco.mj_forward(model, d)
+      const run = (sec) => { for (let i = 0; i < Math.round(sec / model.opt.timestep); i++) mujoco.mj_step(model, d) }
+      run(0.5)
+      const before = plan.blocks.map((b) => [0, 1, 2].map((k) => d.xpos[3 * body(b.block) + k]))
+      // In the load's own frame, a push at g looks like gravity tilted sideways.
+      model.opt.gravity.set([-dir[0] * g * 9.81, -dir[1] * g * 9.81, -9.81])
+      run(0.5)
+      model.opt.gravity.set(gravity)
+      run(1.0)
+      const moved = plan.blocks.map((b, i) => Math.hypot(...[0, 1, 2].map((k) => d.xpos[3 * body(b.block) + k] - before[i][k])))
+      const worst = Math.max(...moved)
+      results.push({ name, worst, pass: worst < limit, block: plan.blocks[moved.indexOf(worst)].block })
+    } finally {
+      model.opt.gravity.set(gravity)
+      d.delete()
+    }
+  }
+  return { pass: results.every((r) => r.pass), limit, height, results }
+}
