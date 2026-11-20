@@ -6,23 +6,23 @@ const cm = (v) => (v * 100).toFixed(1)
 const mm = (v) => (v * 1000).toFixed(0)
 
 // Run the three checks on a plan and log them. Returns { pass, feedback } — feedback is for the AI.
-export function checkPlan(plan, { mujoco, model, log, preview }, extra = []) {
+// all: run every check even after a failure (to show the whole picture, e.g. for the rushed worker's stack).
+export function checkPlan(plan, { mujoco, model, log, preview }, extra = [], { all = false } = {}) {
   preview(plan, 'checking')
   const rules = [...extra, ...checkRules(plan)]
   if (rules.length) {
     log('fail', `Warehouse rules: ${rules.join('; ')}`)
     preview(plan, 'bad')
-    return { pass: false, feedback: rules.join('; ') }
-  }
+    if (!all) return { pass: false, feedback: rules.join('; ') }
+  } else
   log('ok', 'Warehouse rules: every box on the pallet, 70%+ supported, nothing heavy on much lighter, nothing on fragile')
 
   const phys = checkPhysics(mujoco, model, plan)
   if (!phys.stands) {
     log('fail', `Stands? No — ${phys.fell.map((b) => BLOCKS[b].name).join(', ')} fell over on the table`)
     preview(plan, 'bad')
-    return { pass: false, feedback: `even standing still, these boxes fell: ${phys.fell.join(', ')}` }
-  }
-  log('ok', 'Stands on the table: yes (no box moved 5 mm in 2 s)')
+    if (!all) return { pass: false, feedback: `even standing still, these boxes fell: ${phys.fell.join(', ')}` }
+  } else log('ok', 'Stands on the table: yes (no box moved 5 mm in 2 s)')
 
   const t = checkTransport(mujoco, model, plan, 0.5)
   const lines = t.results.map((r) => `${r.name} ${mm(r.worst)} mm`).join(', ')

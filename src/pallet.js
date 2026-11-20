@@ -25,7 +25,7 @@ export const mass = (b) => b.kg / SCALE ** 3
 // the next box to the pick spot, so nothing ever stands behind the box being picked (the forearm would hit it).
 export const CONVEYOR = { x: 0.12, y0: -0.45, y1: -0.19, pick: [0.12, -0.27] }
 export const FLOOR = -0.75
-export function waitingSpot(i) { return [1.2 + i * 0.3, 0] }
+export function waitingSpot(i) { return [-1.6 - i * 0.3, 0] } // behind the camera, out of view
 
 const COLORS = { true: '0.80 0.62 0.42 1', false: '0.72 0.55 0.36 1' } // cardboard (fragile ones a little lighter)
 

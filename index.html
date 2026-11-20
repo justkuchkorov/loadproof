@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Robot Hand</title>
+  <title>LoadProof</title>
   <style>
     html, body { margin: 0; height: 100%; background: #0f1720; color: #e6edf3; font: 14px system-ui, sans-serif; overflow: hidden; }
     #view { position: fixed; inset: 0; }
@@ -12,7 +12,7 @@
     #start:disabled { opacity: 0.6; cursor: default; }
     #camwrap { display: none; position: fixed; right: 12px; bottom: 12px; width: 320px; height: 240px; border-radius: 8px; overflow: hidden; border: 1px solid #30363d; transform: scaleX(-1); }
     #camwrap video, #camwrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-    #agent { position: fixed; left: 12px; bottom: 12px; width: min(420px, calc(100vw - 24px)); background: #0d1117e6; border: 1px solid #30363d; border-radius: 8px; padding: 10px; box-sizing: border-box; }
+    #agent { position: fixed; left: 12px; bottom: 12px; width: min(470px, calc(100vw - 24px)); background: #0d1117e6; border: 1px solid #30363d; border-radius: 8px; padding: 10px; box-sizing: border-box; }
     #agent .row { display: flex; gap: 6px; }
     #ask { flex: 1; min-width: 0; padding: 8px 10px; font: inherit; color: inherit; background: #161b22; border: 1px solid #30363d; border-radius: 6px; }
     #agent button { padding: 8px 12px; font: inherit; border: 0; border-radius: 6px; color: #fff; cursor: pointer; }
@@ -20,6 +20,12 @@
     #build:disabled { opacity: 0.6; cursor: default; }
     #stop { background: #30363d; }
     #truck { background: #9e6a03; flex: 1; }
+    #worker { background: #6e4a1f; flex: 1; }
+    #build { flex: 1.4; }
+    #agent .head { margin-bottom: 4px; }
+    #agent .dim { color: #8b949e; font-size: 12px; }
+    #order { list-style: none; margin: 0 0 8px; padding: 0; columns: 2; font-size: 12px; line-height: 1.5; }
+    #order .fragile { color: #ffa198; font-weight: 700; font-size: 10px; }
     #banner { display: none; position: fixed; top: 64px; left: 50%; transform: translateX(-50%); padding: 10px 22px; background: #9e6a03; color: #fff; font-size: 22px; font-weight: 700; border-radius: 8px; letter-spacing: 0.5px; box-shadow: 0 4px 20px #0008; }
     #log { list-style: none; margin: 8px 0 0; padding: 0; max-height: 34vh; overflow-y: auto; font-size: 13px; line-height: 1.45; }
     #log:empty { display: none; }
@@ -41,9 +47,14 @@
   <button id="start">Start camera</button>
   <div id="banner"></div>
   <div id="agent">
+    <div class="head"><b>LoadProof</b> <span class="dim">· order #A-1042 · half-EUR pallet, 1:5 model</span></div>
+    <ul id="order"></ul>
     <div class="row">
-      <input id="ask" placeholder="What should I build? e.g. a bridge" autocomplete="off">
-      <button id="build">Build</button>
+      <button id="worker" title="Stack the boxes the way a rushed worker would: in the order they arrived, in columns">👷 Rushed worker</button>
+      <button id="build" title="The AI plans the pallet; the plan must pass the rules, stand, and pass the 0.5 g truck test before the robot builds it">🤖 LoadProof: plan &amp; build</button>
+    </div>
+    <div class="row" style="margin-top: 6px">
+      <input id="ask" placeholder="Extra wishes (optional), e.g. chips on top" autocomplete="off">
       <button id="stop">Stop</button>
     </div>
     <div class="row" style="margin-top: 6px">
