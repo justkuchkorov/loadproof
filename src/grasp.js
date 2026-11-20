@@ -40,8 +40,10 @@ export function createGrasp({ mujoco, model, data, objects }) {
   // Returns { goal: [x, y, z] for the grasp point, fingers: 'mirror' | 'fist' | 'open', state, near, held }.
   function update(dt, xy, curl, current) {
     t += dt
+    // Hover above the tallest thing on the table (not counting what the hand holds), so the hand never sweeps into it.
+    const hover = Math.max(HOVER, ...objects.filter((n) => n !== held).map((n) => pos(n)[2] + 0.11))
     const near = state === 'free' ? nearest(xy) : null
-    let goal = [xy[0], xy[1], HOVER]
+    let goal = [xy[0], xy[1], hover]
     let fingers = 'mirror'
 
     if (state === 'free') {
@@ -57,7 +59,7 @@ export function createGrasp({ mujoco, model, data, objects }) {
       fingers = 'fist'
       if (t >= PHASE.grip) go('up')
     } else if (state === 'up') {
-      goal = lerp(from, [from[0], from[1], HOVER], t / PHASE.up)
+      goal = lerp(from, [from[0], from[1], hover], t / PHASE.up)
       fingers = 'fist'
       if (t >= PHASE.up) go('hold')
     } else if (state === 'hold') {
@@ -74,7 +76,7 @@ export function createGrasp({ mujoco, model, data, objects }) {
       fingers = 'open'
       if (t >= PHASE.release) go('rise')
     } else if (state === 'rise') {
-      goal = lerp(from, [from[0], from[1], HOVER], t / PHASE.rise)
+      goal = lerp(from, [from[0], from[1], hover], t / PHASE.rise)
       fingers = 'open'
       if (t >= PHASE.rise) { held = null; go('free') }
     }

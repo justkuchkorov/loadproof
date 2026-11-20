@@ -13,6 +13,7 @@ const PUSHES = [
 ]
 const PUSH_TIME = 0.6
 const SETTLE_TIME = 1.2
+const PARK_TIME = 1.5 // first the hand moves away and everything goes still; nothing may touch the load
 const inBuildArea = (p) => p[0] > 0.12 && p[0] < 0.42 && Math.abs(p[1]) < 0.26
 
 export function createTruckTest({ mujoco, model, data, scene, log }) {
@@ -30,8 +31,8 @@ export function createTruckTest({ mujoco, model, data, scene, log }) {
     const names = Object.keys(BLOCKS).filter((n) => inBuildArea(P(n)))
     if (names.length === 0) { log('fail', 'Truck test: nothing in the build area to test'); return false }
     const height = Math.max(...names.map((n) => P(n)[2] + BLOCKS[n].size[2] / 2))
-    run = { t: 0, step: 0, before: Object.fromEntries(names.map((n) => [n, P(n)])), names, height, accel }
-    log('step', `🚚 Truck test at ${accel} g: ${PUSHES.map((p) => p.name).join(', then ')} (load ${(height * 100).toFixed(1)} cm tall)`)
+    run = { t: 0, step: -1, before: null, names, height, accel }
+    log('step', `🚚 Truck test at ${accel} g: hand away, then ${PUSHES.map((p) => p.name).join(', then ')} (load ${(height * 100).toFixed(1)} cm tall)`)
     return true
   }
 
@@ -39,6 +40,12 @@ export function createTruckTest({ mujoco, model, data, scene, log }) {
   function tick(dt) {
     if (!run) return false
     run.t += dt
+    if (run.step === -1) { // parking: no push yet
+      if (run.t < PARK_TIME) return true
+      run.before = Object.fromEntries(run.names.map((n) => [n, P(n)])) // start positions, measured when still
+      run.step = 0
+      run.t = 0
+    }
     const push = PUSHES[run.step]
     const pushing = run.t < PUSH_TIME
     model.opt.gravity.set(pushing ? [push.dir[0] * run.accel * G, push.dir[1] * run.accel * G, -G] : normal)

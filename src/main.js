@@ -169,7 +169,7 @@ async function main() {
     if (truck.running) {
       // 2c. Truck test: hand parked high and open, gravity tilted by the test.
       truck.tick(dt)
-      for (let k = 0; k < 3; k++) { move[k] += 0.05 * (safe[k] - move[k]); data.mocap_pos[k] = move[k] }
+      for (let k = 0; k < 3; k++) { move[k] += 0.04 * (safe[k] - move[k]); data.mocap_pos[k] = move[k] }
       for (let i = 0; i < model.nu; i++) data.ctrl[i] = 0
       ring.visible = false
       status.textContent = '🚚 Truck test running…'
@@ -181,6 +181,7 @@ async function main() {
     } else {
       // 2b. Shared control: you choose where and when, the robot does the precise part.
       const current = [0, 1, 2].map((k) => data.site_xpos[3 * graspSite + k])
+      if (!tracker) xy = [current[0], current[1]] // no camera: stay put
       const g = grasp.update(dt, xy, hand ? curl : (grasp.state === 'hold' ? 3 : 0), current)
       for (let k = 0; k < 3; k++) move[k] += SMOOTH_MOVE * (g.goal[k] - offset[k] - move[k])
       for (let k = 0; k < 3; k++) data.mocap_pos[k] = move[k]
