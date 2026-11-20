@@ -19,6 +19,7 @@
     #build { background: #1f6feb; }
     #build:disabled { opacity: 0.6; cursor: default; }
     #stop { background: #30363d; }
+    #truck { background: #9e6a03; flex: 1; }
     #log { list-style: none; margin: 8px 0 0; padding: 0; max-height: 34vh; overflow-y: auto; font-size: 13px; line-height: 1.45; }
     #log:empty { display: none; }
     #log li { padding: 2px 0 2px 18px; position: relative; }
@@ -42,6 +43,9 @@
       <input id="ask" placeholder="What should I build? e.g. a bridge" autocomplete="off">
       <button id="build">Build</button>
       <button id="stop">Stop</button>
+    </div>
+    <div class="row" style="margin-top: 6px">
+      <button id="truck" title="Push the load at 0.5 g, like a truck braking or swerving (after the EU test EUMOS 40509)">🚚 Truck test (0.5 g)</button>
     </div>
     <ul id="log"></ul>
   </div>

@@ -7,6 +7,7 @@ import { createGrasp, FIST } from './grasp.js'
 import { createRobot } from './robot.js'
 import { runAgent } from './agent.js'
 import { BLOCKS } from './planner.js'
+import { createTruckTest } from './truck.js'
 
 const status = document.getElementById('status')
 const startButton = document.getElementById('start')
@@ -42,6 +43,7 @@ async function main() {
   let lastHand = null
 
   function reset() {
+    truck?.cancel()
     robot.stop()
     mujoco.mj_resetData(model, data)
     for (let k = 0; k < 3; k++) data.mocap_pos[k] = move[k]
@@ -107,6 +109,16 @@ async function main() {
   ask.addEventListener('keydown', (e) => { if (e.key === 'Enter') startBuild() })
   stopButton.onclick = () => robot.stop()
 
+  // The truck test: push the load at 0.5 g and measure what moved.
+  const truck = createTruckTest({ mujoco, model, data, scene: sim.scene, log })
+  const truckButton = document.getElementById('truck')
+  truckButton.onclick = () => {
+    if (agentBusy || truck.running) return
+    logEl.innerHTML = ''
+    truck.start(0.5)
+  }
+  const safe = [0.18 - offset[0], 0 - offset[1], 0.4 - offset[2]] // hand parked high during the test
+
   window.addEventListener('keydown', (e) => {
     if (e.target === ask) return
     if (e.key === 'c' && lastHand) reach.calibrate(lastHand.image)
@@ -154,7 +166,14 @@ async function main() {
       xy = reach.goal(hand.image)
     }
 
-    if (agentBusy) {
+    if (truck.running) {
+      // 2c. Truck test: hand parked high and open, gravity tilted by the test.
+      truck.tick(dt)
+      for (let k = 0; k < 3; k++) { move[k] += 0.05 * (safe[k] - move[k]); data.mocap_pos[k] = move[k] }
+      for (let i = 0; i < model.nu; i++) data.ctrl[i] = 0
+      ring.visible = false
+      status.textContent = '🚚 Truck test running…'
+    } else if (agentBusy) {
       // 2a. The agent is building: the robot's own skills drive the hand.
       robot.tick(dt)
       ring.visible = false
