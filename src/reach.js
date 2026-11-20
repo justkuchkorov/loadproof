@@ -4,7 +4,7 @@
 // Height is not yours to control: the robot handles it (see grasp.js).
 
 const WORK = { x: [0.0, 0.42], y: [-0.38, 0.38] } // metres over the table (the supply blocks sit at y = ±0.33)
-const GAIN = 0.7                                // metres per full picture width
+const GAIN = 1.2                                // metres per full picture width (a small hand move covers the table)
 const HOME = { x: 0.18, y: 0.0 }                // where the ring goes when your hand is at the calibrated spot
 
 const clamp = (v, [lo, hi]) => Math.max(lo, Math.min(hi, v))
