@@ -95,16 +95,7 @@ Tests (Node, same physics, no browser): `node tests/securing.mjs`, `node tests/l
   through function calling. Without it, fixed steps call the same tools.
 - **MuJoCo 4 (WebAssembly)** for the physics, **three.js** for drawing, **Vite** dev server (it also relays the phone
   remote and keeps the box list), **MediaPipe** (only in the first, robot-hand version), **qrcode-generator**.
-- Models: UR10e and Shadow Hand from **MuJoCo Menagerie**.
-
-## When it was built (from the git history)
-
-- **Before the hackathon started (the evening of 20 November and the morning of 21 November, 34 commits):** the
-  first version with a robot hand, the Gemini planner, the physics checks and truck test, Compare, the report, and
-  the UR10e cell.
-- **During the hackathon (from 11:00 on 21 November, 27 commits):** the agent that works through tools, the honest
-  vacuum cup, the 3D camera, the truck tests with EN 12195-1 road values, the strap count, worker mode, the phone
-  remote, your own boxes with QR labels and the loading sheet, the fixes from our tests, this README.
+- Models: UR10e and Shadow Hand from **MuJoCo Menagerie**
 
 ## Credits
 
