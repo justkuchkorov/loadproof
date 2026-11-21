@@ -3,6 +3,7 @@
 
 export const SCALE = 5
 export const PALLET = { x: 0.26, y: 0, sx: 0.12, sy: 0.16, top: 0.029 } // centre and size in metres; top surface height
+export const PALLET_B = { ...PALLET, y: -0.27 } // the comparison pallet, on the right
 export const FRICTION = 0.6 // cardboard with anti-slip sheets: slip angle 30-45 degrees -> tan 30 = 0.58 (Smurfit Kappa)
 
 // One example order. kg and cm are the REAL box (the model is 1:5).
@@ -107,6 +108,13 @@ export function sceneXml(order = ORDER) {
     return `    <body name="${b.id}" pos="${x.toFixed(3)} ${y.toFixed(3)} ${(sz / 2).toFixed(4)}"><freejoint/>` +
       `<geom name="${b.id}" class="box" type="box" size="${sx / 2} ${sy / 2} ${sz / 2}" mass="${mass(b).toFixed(4)}" rgba="${COLORS[b.fragile]}"/></body>`
   }).join('\n')
+  // Copies (c1..cn) for the comparison pallet; they wait under the floor until "Compare" places them.
+  const copies = order.map((b, i) => {
+    const [sx, sy, sz] = size(b)
+    const id = copyId(b.id)
+    return `    <body name="${id}" pos="${(-1.6 - i * 0.3).toFixed(3)} 0 ${(-0.75 + sz / 2).toFixed(4)}"><freejoint/>` +
+      `<geom name="${id}" class="box" type="box" size="${sx / 2} ${sy / 2} ${sz / 2}" mass="${mass(b).toFixed(4)}" rgba="${COLORS[b.fragile]}"/></body>`
+  }).join('\n')
   const grips = order.map((b) => `    <weld name="grip_${b.id}" body1="rh_palm" body2="${b.id}" active="false"/>`).join('\n')
   return `<mujoco model="LoadProof pallet scene">
   <include file="hand_free.xml"/>
@@ -123,8 +131,10 @@ export function sceneXml(order = ORDER) {
     <geom name="floor" pos="0 0 -0.75" size="0 0 0.05" type="plane" rgba="0.2 0.3 0.4 1"/>
     <geom name="table" type="box" size="0.35 0.68 0.02" pos="0.2 0.1 -0.02" rgba="0.42 0.45 0.48 1" friction="1 0.01 0.001"/>
     <geom name="pallet" type="box" size="${PALLET.sx / 2} ${PALLET.sy / 2} ${PALLET.top / 2}" pos="${PALLET.x} ${PALLET.y} ${PALLET.top / 2}" rgba="0.76 0.6 0.38 1" friction="${FRICTION} 0.005 0.0005"/>
+    <geom name="pallet_b" type="box" size="${PALLET.sx / 2} ${PALLET.sy / 2} ${PALLET.top / 2}" pos="${PALLET_B.x} ${PALLET_B.y} ${PALLET.top / 2}" rgba="0.76 0.6 0.38 1" friction="${FRICTION} 0.005 0.0005"/>
     <body name="hand_target" mocap="true" pos="-0.2 0 0.15" quat="1 0 1 0"/>
 ${boxes}
+${copies}
   </worldbody>
   <equality>
     <weld body1="hand_target" body2="rh_forearm" solref="0.02 1"/>
@@ -133,6 +143,8 @@ ${grips}
 </mujoco>
 `
 }
+
+export const copyId = (id) => 'c' + id.slice(1)
 
 // The stack a rushed worker makes: boxes in arrival order, four corner columns, each box on whatever is already
 // in its corner(s). A wide box takes both corners of its row, a long box both corners of its column.

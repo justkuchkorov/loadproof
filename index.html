@@ -19,7 +19,8 @@
     #build { background: #1f6feb; }
     #build:disabled { opacity: 0.6; cursor: default; }
     #stop { background: #30363d; }
-    #truck { background: #9e6a03; flex: 1; }
+    #truck { background: #9e6a03; flex: 1.6; }
+    #compare { background: #6639ba; flex: 1; }
     #worker { background: #6e4a1f; flex: 1; }
     #build { flex: 1.4; }
     #agent .head { margin-bottom: 4px; }
@@ -77,6 +78,7 @@
       <button id="stop">Stop</button>
     </div>
     <div class="row" style="margin-top: 6px">
+      <button id="compare" title="Rushed stack on the right pallet, LoadProof plan on the left, same boxes, placed at once">⚖️ Compare</button>
       <button id="truck" title="Push the load at 0.5 g, like a truck braking or swerving (after the EU test EUMOS 40509)">🚚 Truck test (0.5 g)</button>
     </div>
     <ul id="log"></ul>

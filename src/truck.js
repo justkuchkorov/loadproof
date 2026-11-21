@@ -5,7 +5,7 @@
 // so the test tilts MuJoCo's gravity for 0.6 s per push, then lets everything settle.
 import * as THREE from 'three'
 import { BLOCKS } from './planner.js'
-import { PALLET } from './pallet.js'
+import { PALLET, PALLET_B, copyId } from './pallet.js'
 
 const G = 9.81
 const PUSHES = [
@@ -16,7 +16,8 @@ const PUSH_TIME = 0.6
 const SETTLE_TIME = 1.2
 const PARK_TIME = 1.5 // first the hand moves away and everything goes still; nothing may touch the load
 const SLOW = 0.3      // slow motion during the pushes, so you can watch the load tilt
-const inBuildArea = (p) => Math.abs(p[0] - PALLET.x) < 0.12 && Math.abs(p[1] - PALLET.y) < 0.14 // on or near the pallet
+const near = (pal) => (p) => Math.abs(p[0] - pal.x) < 0.12 && Math.abs(p[1] - pal.y) < 0.13 && p[2] > -0.3
+const AREAS = [{ name: 'LoadProof pallet', test: near(PALLET) }, { name: 'rushed pallet', test: near(PALLET_B) }]
 
 export function createTruckTest({ mujoco, model, data, scene, log }) {
   const body = (n) => mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, n)
@@ -29,12 +30,17 @@ export function createTruckTest({ mujoco, model, data, scene, log }) {
 
   let run = null // { t, step, before, names, height, accel }
 
+  // Every box name, copies included (a copy exists for every box of the order).
+  const allNames = () => Object.keys(BLOCKS).flatMap((n) => [n, copyId(n)])
+  const sizeOf = (n) => BLOCKS[n]?.size ?? BLOCKS['b' + n.slice(1)].size
+  const nameOf = (n) => BLOCKS[n]?.name ?? BLOCKS['b' + n.slice(1)].name
+
   function start(accel = 0.5) {
-    const names = Object.keys(BLOCKS).filter((n) => inBuildArea(P(n)))
-    if (names.length === 0) { log('fail', 'Truck test: nothing on the pallet to test'); return false }
-    const height = Math.max(...names.map((n) => P(n)[2] + BLOCKS[n].size[2] / 2))
-    run = { t: 0, step: -1, before: null, names, height, accel }
-    log('step', `🚚 Truck test at ${accel} g: hand away, then ${PUSHES.map((p) => p.name).join(', then ')} (load ${(height * 100).toFixed(1)} cm tall)`)
+    const groups = AREAS.map((a) => ({ ...a, names: allNames().filter((n) => a.test(P(n))) })).filter((g) => g.names.length)
+    if (groups.length === 0) { log('fail', 'Truck test: nothing on a pallet to test'); return false }
+    for (const g of groups) g.height = Math.max(...g.names.map((n) => P(n)[2] + sizeOf(n)[2] / 2))
+    run = { t: 0, step: -1, before: null, groups, accel }
+    log('step', `🚚 Truck test at ${accel} g: hand away, then ${PUSHES.map((p) => p.name).join(', then ')} (${groups.map((g) => `${g.name} ${(g.height * 100).toFixed(1)} cm tall`).join('; ')})`)
     return true
   }
 
@@ -44,7 +50,7 @@ export function createTruckTest({ mujoco, model, data, scene, log }) {
     run.t += dt
     if (run.step === -1) { // parking: no push yet
       if (run.t < PARK_TIME) return true
-      run.before = Object.fromEntries(run.names.map((n) => [n, P(n)])) // start positions, measured when still
+      run.before = Object.fromEntries(run.groups.flatMap((g) => g.names).map((n) => [n, P(n)])) // start positions, measured when still
       run.step = 0
       run.t = 0
     }
@@ -56,15 +62,17 @@ export function createTruckTest({ mujoco, model, data, scene, log }) {
     if (run.t >= PUSH_TIME + SETTLE_TIME) { run.step++; run.t = 0 }
     if (run.step < PUSHES.length) return true
 
-    // Done: how far did each block end up from where it started?
+    // Done: how far did each box end up from where it started? One verdict per pallet.
     model.opt.gravity.set(normal)
     arrow.visible = false
-    const limit = Math.max(0.05 * run.height, 0.002)
-    const moved = run.names.map((n) => [n, Math.hypot(...P(n).map((v, k) => v - run.before[n][k]))])
-    const [worstName, worst] = moved.reduce((a, b) => (b[1] > a[1] ? b : a))
-    const pass = worst < limit
-    log(pass ? 'ok' : 'fail', `Truck test ${pass ? 'PASSED' : 'FAILED'}: the ${BLOCKS[worstName].name} moved ${(worst * 1000).toFixed(0)} mm ` +
-      `(limit: 5% of ${(run.height * 100).toFixed(1)} cm = ${(limit * 1000).toFixed(0)} mm)`)
+    for (const g of run.groups) {
+      const limit = Math.max(0.05 * g.height, 0.002)
+      const moved = g.names.map((n) => [n, Math.hypot(...P(n).map((v, k) => v - run.before[n][k]))])
+      const [worstName, worst] = moved.reduce((a, b) => (b[1] > a[1] ? b : a))
+      const pass = worst < limit
+      log(pass ? 'ok' : 'fail', `${g.name}: truck test ${pass ? 'PASSED' : 'FAILED'} — the ${nameOf(worstName)} moved ${(worst * 1000).toFixed(0)} mm ` +
+        `(limit: 5% of ${(g.height * 100).toFixed(1)} cm = ${(limit * 1000).toFixed(0)} mm)`)
+    }
     run = null
     return false
   }

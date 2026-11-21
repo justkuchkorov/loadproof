@@ -82,6 +82,7 @@ export async function createSim(container, { xml, labels = {} } = {}) {
         xmat[m + 6], xmat[m + 7], xmat[m + 8], xpos[p + 2],
         0, 0, 0, 1)
       mesh.matrixWorldNeedsUpdate = true
+      mesh.visible = model.geom_bodyid[id] === 0 || xpos[p + 2] > -0.3 // waiting under the floor = not drawn
     }
     controls.update()
     renderer.render(scene, camera)

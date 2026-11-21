@@ -7,7 +7,7 @@ import { createGrasp, FIST } from './grasp.js'
 import { createRobot } from './robot.js'
 import { runAgent, checkPlan } from './agent.js'
 import { BLOCKS, setOrder } from './planner.js'
-import { ORDER, CATALOG, sceneXml, workersStack, orderFrom, randomOrder } from './pallet.js'
+import { ORDER, CATALOG, PALLET, PALLET_B, sceneXml, workersStack, orderFrom, randomOrder, copyId } from './pallet.js'
 import { createTruckTest } from './truck.js'
 
 const status = document.getElementById('status')
@@ -24,7 +24,7 @@ async function main() {
   const demo = labelsInHash.length === 0
   const order = demo ? ORDER : orderFrom(labelsInHash)
   setOrder(order)
-  const labels = Object.fromEntries(order.map((b) => [b.id, { title: b.label, kg: b.kg, fragile: b.fragile }]))
+  const labels = Object.fromEntries(order.flatMap((b) => [[b.id, { title: b.label, kg: b.kg, fragile: b.fragile }], [copyId(b.id), { title: b.label, kg: b.kg, fragile: b.fragile }]]))
   const sim = await createSim(document.getElementById('view'), { xml: sceneXml(order), labels })
   const { mujoco, model, data } = sim
   window.sim = sim
@@ -43,7 +43,7 @@ async function main() {
   const graspSite = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE.value, 'grasp_site')
   const offset = [0, 1, 2].map((k) => data.site_xpos[3 * graspSite + k] - data.mocap_pos[k])
   const move = Array.from(data.mocap_pos.subarray(0, 3))
-  const PARK = [0.1 - offset[0], -0.32 - offset[1], 0.34 - offset[2]] // hand parked high on the right, clear of the boxes and the pallet
+  const PARK = [0.47 - offset[0], -0.5 - offset[1], 0.34 - offset[2]] // hand parked high in the far right corner, clear of both pallets
   const reach = createReach()
   const grasp = createGrasp({ mujoco, model, data, objects: Object.keys(BLOCKS) })
   const robot = createRobot({ mujoco, model, data })
@@ -60,6 +60,7 @@ async function main() {
     for (let k = 0; k < 3; k++) { move[k] = PARK[k]; data.mocap_pos[k] = PARK[k]; data.qpos[fa + k] = PARK[k] }
     parked = true
     mujoco.mj_forward(model, data)
+    if (typeof signs !== 'undefined') signs.forEach((s) => { s.visible = false })
   }
 
   // A ring on the table under the hand: grey = nothing below, green = close your hand to grab.
@@ -148,7 +149,8 @@ async function main() {
     log('you', notes ? `LoadProof plan · “${notes}”` : 'LoadProof plan')
     try {
       const useRobot = document.getElementById('userobot').checked
-      await runAgent({ request, mujoco, model, robot, log, preview, reset, place: useRobot ? null : place })
+      const plan = await runAgent({ request, mujoco, model, robot, log, preview, reset, place: useRobot ? null : place })
+      if (plan) lastGoodPlan = plan
     } catch (err) {
       log('fail', err.message === 'stopped' ? 'Stopped. Your hand is in charge again.' : 'Error: ' + err.message)
       console.error(err)
@@ -158,6 +160,44 @@ async function main() {
     buildButton.disabled = false
   }
   buildButton.onclick = startBuild
+
+  // Signs over the two pallets, shown in Compare.
+  function sign(text, color, y) {
+    const c = document.createElement('canvas'); c.width = 512; c.height = 96
+    const g = c.getContext('2d'); g.fillStyle = color; g.fillRect(0, 0, 512, 96)
+    g.fillStyle = '#fff'; g.font = 'bold 54px system-ui, sans-serif'; g.textAlign = 'center'; g.fillText(text, 256, 66)
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false }))
+    s.scale.set(0.16, 0.03, 1); s.position.set(PALLET.x - 0.1, y, 0.01); s.renderOrder = 11; s.visible = false // on the table in front of the pallet
+    sim.scene.add(s)
+    return s
+  }
+  const signs = [sign('🤖 LoadProof', '#1f6feb', PALLET.y), sign('👷 Rushed', '#6e4a1f', PALLET_B.y)]
+  let lastGoodPlan = null
+
+  // Compare: the rushed stack on the right pallet, the LoadProof plan on the left, both placed at once.
+  document.getElementById('compare').onclick = async () => {
+    if (agentBusy || truck.running) return
+    agentBusy = true
+    reset()
+    logEl.innerHTML = ''
+    log('you', 'Compare: rushed worker (right) against LoadProof (left), same boxes')
+    try {
+      if (!lastGoodPlan) {
+        lastGoodPlan = await runAgent({ request: 'Plan the pallet for this order so it passes the 0.5 g truck test.', mujoco, model, robot, log, preview, reset, place: () => {} })
+        preview(null)
+      }
+      if (!lastGoodPlan) throw new Error('no LoadProof plan passed the checks')
+      reset()
+      place(lastGoodPlan)
+      const rushed = workersStack(order)
+      place({ blocks: rushed.blocks.map((b) => ({ ...b, block: copyId(b.block), y: b.y + PALLET_B.y - PALLET.y })) })
+      signs.forEach((s) => { s.visible = true })
+      log('info', 'Both stand on the table. Press 🚚 Truck test to shake both at once.')
+    } catch (err) {
+      log('fail', 'Compare: ' + err.message)
+    }
+    agentBusy = false
+  }
 
   // The rushed worker's stack (arrival order, columns), placed at once, then checked in the computer.
   document.getElementById('worker').onclick = () => {
@@ -212,6 +252,7 @@ async function main() {
   const auto = new URLSearchParams(location.search).get('build')
   if (auto) { ask.value = auto; startBuild() }
   if (new URLSearchParams(location.search).has('worker')) document.getElementById('worker').click()
+  if (new URLSearchParams(location.search).has('compare')) document.getElementById('compare').onclick().then(() => { if (new URLSearchParams(location.search).has('truck')) document.getElementById('truck').click() })
   if (new URLSearchParams(location.search).has('editor')) document.getElementById('editor').classList.add('open')
 
   let last = performance.now()

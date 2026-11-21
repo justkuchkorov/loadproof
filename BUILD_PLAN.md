@@ -22,7 +22,7 @@ later. He sleeps; the laptop stays plugged in with the lid OPEN (closing it slee
       long 30×80 cm; different heights, weights, fragile). Order builder in the panel (+/− per type) and a 🎲 Random
       button. Changing the order rebuilds the scene. The AI plans any order; checks as now. "Show plan" places the
       checked plan at once; the robot build stays available (warn that the tested build is the demo order).
-- [ ] 2. Side by side: a second pallet. "Compare" puts the rushed stack on one pallet and the LoadProof plan on the
+- [x] 2. Side by side: a second pallet. "Compare" puts the rushed stack on one pallet and the LoadProof plan on the
       other (placed at once), then one truck test shakes both; the result names both.
 - [ ] 3. Lessons learned: every checked plan is saved in the browser (order, plan, result, why it failed). The
       lessons go into the AI prompt. The panel shows "plans tested / failed / lessons".
