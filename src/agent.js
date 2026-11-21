@@ -156,7 +156,7 @@ export async function build(plan, { robot, log, reset, feed }) {
   for (const [i, b] of plan.blocks.entries()) {
     const name = BLOCKS[b.block].name
     for (let fix = 0; fix < 3; fix++) {
-      const dest = onWhatIsReallyThere(b, placed, robot)
+      const dest = clearOfNeighbours(onWhatIsReallyThere(b, placed, robot), b.block, placed, robot)
       log('step', `${i + 1}/${n}: ${name}${fix ? ' — trying again' : ''}`)
       if (feed) await feed(b.block) // the conveyor brings it, if it is still waiting
       const r = await robot.pickPlace(b.block, dest)
@@ -201,7 +201,7 @@ export async function repair(plan, { robot, log }) {
     const below = order.slice(0, order.indexOf(b))
     for (let fix = 0; fix < 2; fix++) {
       log('step', `Putting the ${BLOCKS[b.block].name} back${fix ? ' (again)' : ''}`)
-      const r = await robot.pickPlace(b.block, onWhatIsReallyThere(b, below, robot), { gentle: true })
+      const r = await robot.pickPlace(b.block, clearOfNeighbours(onWhatIsReallyThere(b, below, robot), b.block, below, robot), { gentle: true })
       if (r.ok && inPlace(b, robot)) { log('ok', `The ${BLOCKS[b.block].name} is back in place`); break }
     }
   }
@@ -210,6 +210,24 @@ export async function repair(plan, { robot, log }) {
   if (still.length) log('fail', `Still out of place: ${still.map((b) => BLOCKS[b.block].name).join(', ')}`)
   else log('done', 'Pallet repaired: every box measured and in place')
   return still.length === 0
+}
+
+// A small gap to the boxes already standing beside it (1.5 mm in the model, 7.5 mm real), as real palletizers leave:
+// the spots fit with no gap, and a box lowered right against another rubs it sideways. dest: [x, y, z] of box `id`;
+// placed: [{ block }] already on the pallet (where they really are is measured).
+export function clearOfNeighbours(dest, id, placed, robot) {
+  const GAP = 0.0015
+  const [sx, sy, sz] = BLOCKS[id].size
+  let [x, y] = dest
+  for (const p of placed) {
+    const [px, py, pz] = robot.P(p.block), [qx, qy, qz] = BLOCKS[p.block].size
+    const sideBySide = Math.min(dest[2] + sz / 2, pz + qz / 2) - Math.max(dest[2] - sz / 2, pz - qz / 2) > 0.005
+    if (!sideBySide) continue
+    const push = (gap) => Math.min(0.003, GAP - gap)
+    if (Math.abs(py - y) < (sy + qy) / 2 - 0.002) { const gap = Math.abs(px - x) - (sx + qx) / 2; if (gap < GAP && gap > -0.01) x += Math.sign(x - px || 1) * push(gap) }
+    if (Math.abs(px - x) < (sx + qx) / 2 - 0.002) { const gap = Math.abs(py - y) - (sy + qy) / 2; if (gap < GAP && gap > -0.01) y += Math.sign(y - py || 1) * push(gap) }
+  }
+  return [x, y, dest[2]]
 }
 
 // A box that rests on others goes where those boxes REALLY ended up, not where the plan said.

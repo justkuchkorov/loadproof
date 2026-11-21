@@ -4,7 +4,7 @@
 // picks and places with its usual skills (camera, vacuum, paths). Like a palletizing cell's operator screen.
 import { BLOCKS, checkRules, snapHeights } from './planner.js'
 import { PALLET, SPOTS, ARM } from './pallet.js'
-import { buildOrder } from './agent.js'
+import { buildOrder, clearOfNeighbours } from './agent.js'
 
 export function createWorker({ robot, log, preview, suggestion }) {
   let selected = null // the box the worker chose
@@ -86,7 +86,7 @@ export function createWorker({ robot, log, preview, suggestion }) {
     log('step', `The robot places the ${name(n)} on ${spot}`)
     try {
       robot.start()
-      const r = await robot.pickPlace(n, [s.x, s.y, s.z])
+      const r = await robot.pickPlace(n, clearOfNeighbours([s.x, s.y, s.z], n, placed().map((b) => ({ block: b })), robot))
       if (!r.ok) log('fail', r.dropped ? `The vacuum lost the ${name(n)} (it needed ${r.cupN} N)` : `Could not grab the ${name(n)}`)
       else log(s.problems.length ? 'fail' : 'ok', `Placed the ${name(n)} on ${spot}, layer ${s.layer}${s.problems.length ? ' — against LoadProof\'s advice' : ''}`)
       await robot.home()
