@@ -26,6 +26,14 @@
     #agent .dim { color: #8b949e; font-size: 12px; }
     #order { list-style: none; margin: 0 0 8px; padding: 0; columns: 2; font-size: 12px; line-height: 1.5; }
     #order .fragile { color: #ffa198; font-weight: 700; font-size: 10px; }
+    #editor { display: none; border-top: 1px solid #30363d; padding-top: 6px; margin-bottom: 6px; }
+    #editor.open { display: block; }
+    #agent .chip { padding: 2px 7px; margin: 2px; font-size: 12px; border-radius: 10px; background: #30363d; }
+    #agent .chip.add { background: #1f3a5f; }
+    #agent .link { background: none; padding: 0 4px; color: #58a6ff; font-size: 12px; text-decoration: underline; }
+    #random, #demo, #load { flex: 1; background: #30363d; }
+    #load { background: #1f6feb; }
+    .toggle { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
     #banner { display: none; position: fixed; top: 64px; left: 50%; transform: translateX(-50%); padding: 10px 22px; background: #9e6a03; color: #fff; font-size: 22px; font-weight: 700; border-radius: 8px; letter-spacing: 0.5px; box-shadow: 0 4px 20px #0008; }
     #log { list-style: none; margin: 8px 0 0; padding: 0; max-height: 34vh; overflow-y: auto; font-size: 13px; line-height: 1.45; }
     #log:empty { display: none; }
@@ -47,14 +55,25 @@
   <button id="start">Start camera</button>
   <div id="banner"></div>
   <div id="agent">
-    <div class="head"><b>LoadProof</b> <span class="dim">· order #A-1042 · half-EUR pallet, 1:5 model</span></div>
+    <div class="head"><b>LoadProof</b> <span class="dim">· <span id="ordername"></span> · half-EUR pallet, 1:5 model</span>
+      <button id="edit" class="link">change order</button></div>
     <ul id="order"></ul>
+    <div id="editor">
+      <div id="draft"></div>
+      <div id="catalog"></div>
+      <div class="row" style="margin: 6px 0 8px">
+        <button id="random">🎲 Random order</button>
+        <button id="demo">Demo order</button>
+        <button id="load">Load this order</button>
+      </div>
+    </div>
     <div class="row">
       <button id="worker" title="Stack the boxes the way a rushed worker would: in the order they arrived, in columns">👷 Rushed worker</button>
       <button id="build" title="The AI plans the pallet; the plan must pass the rules, stand, and pass the 0.5 g truck test before the robot builds it">🤖 LoadProof: plan &amp; build</button>
     </div>
     <div class="row" style="margin-top: 6px">
       <input id="ask" placeholder="Extra wishes (optional), e.g. chips on top" autocomplete="off">
+      <label class="dim toggle"><input type="checkbox" id="userobot" checked> 🦾 robot builds it</label>
       <button id="stop">Stop</button>
     </div>
     <div class="row" style="margin-top: 6px">

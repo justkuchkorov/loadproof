@@ -18,7 +18,7 @@ later. He sleeps; the laptop stays plugged in with the lid OPEN (closing it slee
 
 ## Items (in order)
 
-- [ ] 1. Random / chosen orders. A catalogue of box types that fit the pallet spots (small 30×40, wide 60×40,
+- [x] 1. Random / chosen orders. A catalogue of box types that fit the pallet spots (small 30×40, wide 60×40,
       long 30×80 cm; different heights, weights, fragile). Order builder in the panel (+/− per type) and a 🎲 Random
       button. Changing the order rebuilds the scene. The AI plans any order; checks as now. "Show plan" places the
       checked plan at once; the robot build stays available (warn that the tested build is the demo order).

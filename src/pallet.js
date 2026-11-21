@@ -17,6 +17,62 @@ export const ORDER = [
   { id: 'b8', label: 'CANS', kg: 8, fragile: false, cm: [30, 80, 20] },
 ]
 
+// The catalogue: every box type comes in one of three footprints that fit the pallet's spots
+// (small 30x40, wide 60x40, long 30x80 cm), with its own height, weight and fragility. Real sizes; the model is 1:5.
+export const CATALOG = {
+  WATER: { kg: 12, fragile: false, cm: [60, 40, 25] },
+  PAPER: { kg: 20, fragile: false, cm: [60, 40, 25] },
+  TOYS: { kg: 4, fragile: false, cm: [60, 40, 35] },
+  PILLOWS: { kg: 1, fragile: false, cm: [60, 40, 35] },
+  CANS: { kg: 8, fragile: false, cm: [30, 80, 20] },
+  TILES: { kg: 14, fragile: false, cm: [30, 80, 20] },
+  RUG: { kg: 5, fragile: false, cm: [30, 80, 20] },
+  TV: { kg: 9, fragile: true, cm: [30, 80, 35] },
+  BOOKS: { kg: 15, fragile: false, cm: [30, 40, 20] },
+  RICE: { kg: 10, fragile: false, cm: [30, 40, 25] },
+  DETERGENT: { kg: 9, fragile: false, cm: [30, 40, 30] },
+  CEREAL: { kg: 3, fragile: false, cm: [30, 40, 30] },
+  JARS: { kg: 6, fragile: true, cm: [30, 40, 25] },
+  CHIPS: { kg: 2, fragile: true, cm: [30, 40, 35] },
+}
+
+// An order from a list of catalogue names, e.g. ['WATER', 'CHIPS'] -> boxes b1, b2, ...
+export const orderFrom = (labels) => labels.map((label, i) => ({ id: `b${i + 1}`, label, ...CATALOG[label] }))
+
+// A random order that CAN be stacked well: build a good stack in secret (full layers, heavy low, fragile on top),
+// then shuffle the boxes, so the arrival order gives no hint. 2 or 3 layers, at most 9 boxes.
+const LAYERS = [['wide', 'wide'], ['long', 'long'], ['small', 'small', 'small', 'small'], ['wide', 'small', 'small'], ['long', 'small', 'small']]
+const footprint = (label) => { const [x, y] = CATALOG[label].cm; return x > 40 ? 'wide' : y > 50 ? 'long' : 'small' }
+export function randomOrder(rand = Math.random) {
+  const pick = (list) => list[Math.floor(rand() * list.length)]
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const layers = 2 + (rand() < 0.5 ? 1 : 0)
+    const labels = []
+    let ok = true
+    let below = Infinity // lightest box of the layer below: nothing may be more than 1.5 times heavier
+    for (let L = 0; L < layers && ok; L++) {
+      const top = L === layers - 1
+      const shape = pick(LAYERS)
+      const layer = []
+      for (const kind of shape) {
+        const options = Object.keys(CATALOG).filter((n) => footprint(n) === kind && (top || !CATALOG[n].fragile) && CATALOG[n].kg <= 1.5 * below)
+        if (options.length === 0) { ok = false; break }
+        const fresh = options.filter((n) => labels.concat(layer).filter((m) => m === n).length < 2) // variety: each type at most twice
+        layer.push(pick(fresh.length ? fresh : options))
+      }
+      if (!ok) break
+      const heights = new Set(layer.map((n) => CATALOG[n].cm[2]))
+      if (!top && heights.size > 1) { ok = false; break } // lower layers must be even
+      labels.push(...layer)
+      below = Math.min(...layer.map((n) => CATALOG[n].kg))
+    }
+    if (!ok || labels.length > 9) continue
+    for (let i = labels.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [labels[i], labels[j]] = [labels[j], labels[i]] }
+    return labels
+  }
+  return ORDER.map((b) => b.label)
+}
+
 // Model size in metres, and model mass (1:5 scale -> volume and mass / 125).
 export const size = (b) => b.cm.map((c) => c / 100 / SCALE)
 export const mass = (b) => b.kg / SCALE ** 3
@@ -65,7 +121,7 @@ export function sceneXml(order = ORDER) {
     <light pos="0 0 1.5"/>
     <light pos="0.3 0 1.5" dir="0 0 -1" directional="true"/>
     <geom name="floor" pos="0 0 -0.75" size="0 0 0.05" type="plane" rgba="0.2 0.3 0.4 1"/>
-    <geom name="table" type="box" size="0.35 0.6 0.02" pos="0.2 0.05 -0.02" rgba="0.42 0.45 0.48 1" friction="1 0.01 0.001"/>
+    <geom name="table" type="box" size="0.35 0.68 0.02" pos="0.2 0.1 -0.02" rgba="0.42 0.45 0.48 1" friction="1 0.01 0.001"/>
     <geom name="pallet" type="box" size="${PALLET.sx / 2} ${PALLET.sy / 2} ${PALLET.top / 2}" pos="${PALLET.x} ${PALLET.y} ${PALLET.top / 2}" rgba="0.76 0.6 0.38 1" friction="${FRICTION} 0.005 0.0005"/>
     <body name="hand_target" mocap="true" pos="-0.2 0 0.15" quat="1 0 1 0"/>
 ${boxes}

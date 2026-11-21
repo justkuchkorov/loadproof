@@ -37,7 +37,7 @@ export function checkPlan(plan, { mujoco, model, log, preview }, extra = [], { a
   return { pass: true }
 }
 
-export async function runAgent({ request, mujoco, model, robot, log, preview, reset, feed }) {
+export async function runAgent({ request, mujoco, model, robot, log, preview, reset, feed, place }) {
   let plan = null
   let raw = null
   let feedback = null
@@ -54,7 +54,8 @@ export async function runAgent({ request, mujoco, model, robot, log, preview, re
       layers.map((L) => `layer ${L}: ` + plan.blocks.filter((b) => b.layer === L).map((b) => `${BLOCKS[b.block].name} ${b.spot}`).join(', ')).join(' | '))
     const c = checkPlan(plan, { mujoco, model, log, preview }, problems)
     if (!c.pass) { feedback = c.feedback; continue }
-    await build(plan, { robot, log, reset, feed })
+    if (place) { reset(); place(plan); log('step', 'Placed the checked plan at once (robot build switched off)') }
+    else await build(plan, { robot, log, reset, feed })
     log('done', plan.say)
     preview(null)
     return plan

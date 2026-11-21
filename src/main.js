@@ -6,8 +6,8 @@ import { createReach } from './reach.js'
 import { createGrasp, FIST } from './grasp.js'
 import { createRobot } from './robot.js'
 import { runAgent, checkPlan } from './agent.js'
-import { BLOCKS } from './planner.js'
-import { ORDER, sceneXml, workersStack } from './pallet.js'
+import { BLOCKS, setOrder } from './planner.js'
+import { ORDER, CATALOG, sceneXml, workersStack, orderFrom, randomOrder } from './pallet.js'
 import { createTruckTest } from './truck.js'
 
 const status = document.getElementById('status')
@@ -18,8 +18,14 @@ const HELP = 'R = reset'
 const PREVIEW_COLOR = { checking: 0x8b949e, bad: 0xf85149, good: 0x3fb950 }
 
 async function main() {
-  const labels = Object.fromEntries(ORDER.map((b) => [b.id, { title: b.label, kg: b.kg, fragile: b.fragile }]))
-  const sim = await createSim(document.getElementById('view'), { xml: sceneXml(ORDER), labels })
+  // The order: from the address (#order=WATER,CHIPS,...) or the demo order #A-1042.
+  const fromHash = new URLSearchParams(location.hash.slice(1)).get('order')
+  const labelsInHash = fromHash ? fromHash.split(',').filter((n) => CATALOG[n]) : []
+  const demo = labelsInHash.length === 0
+  const order = demo ? ORDER : orderFrom(labelsInHash)
+  setOrder(order)
+  const labels = Object.fromEntries(order.map((b) => [b.id, { title: b.label, kg: b.kg, fragile: b.fragile }]))
+  const sim = await createSim(document.getElementById('view'), { xml: sceneXml(order), labels })
   const { mujoco, model, data } = sim
   window.sim = sim
 
@@ -81,8 +87,41 @@ async function main() {
   }
 
   // The order, shown in the panel.
-  document.getElementById('order').innerHTML = ORDER.map((b) =>
+  document.getElementById('ordername').textContent = demo ? 'order #A-1042 (demo)' : `custom order · ${order.length} boxes`
+  document.getElementById('order').innerHTML = order.map((b) =>
     `<li><b>${b.label}</b> ${b.kg} kg${b.fragile ? ' <span class="fragile">FRAGILE</span>' : ''} <span class="dim">${b.cm.join('×')} cm</span></li>`).join('')
+
+  // The order editor: add or remove boxes, or roll a random order; "Load" rebuilds the scene with it.
+  let draft = order.map((b) => b.label)
+  const draftEl = document.getElementById('draft')
+  const spotsUsed = (list) => list.reduce((s, n) => s + (CATALOG[n].cm[0] > 40 || CATALOG[n].cm[1] > 50 ? 2 : 1), 0)
+  function showDraft() {
+    draftEl.innerHTML = draft.map((n, i) => `<button class="chip" data-i="${i}" title="remove">${n} ×</button>`).join('') +
+      `<span class="dim"> ${draft.length} boxes · ${spotsUsed(draft)} spots (4 per layer)</span>`
+    draftEl.querySelectorAll('[data-i]').forEach((el) => { el.onclick = () => { draft.splice(+el.dataset.i, 1); showDraft() } })
+  }
+  document.getElementById('catalog').innerHTML = Object.entries(CATALOG).map(([n, c]) =>
+    `<button class="chip add" data-n="${n}" title="${c.cm.join('×')} cm, ${c.kg} kg${c.fragile ? ', fragile' : ''}">+ ${n}</button>`).join('')
+  document.querySelectorAll('#catalog [data-n]').forEach((el) => { el.onclick = () => { if (draft.length < 9) { draft.push(el.dataset.n); showDraft() } } })
+  document.getElementById('random').onclick = () => { draft = randomOrder(); showDraft() }
+  document.getElementById('demo').onclick = () => { location.hash = ''; location.reload() }
+  document.getElementById('load').onclick = () => {
+    if (draft.length === 0) return
+    location.hash = 'order=' + draft.join(',')
+    location.reload()
+  }
+  document.getElementById('edit').onclick = () => { document.getElementById('editor').classList.toggle('open') }
+  showDraft()
+
+  // Put a plan's boxes straight on the pallet (used when the robot build is switched off, and for the rushed stack).
+  function place(plan) {
+    for (const b of plan.blocks) {
+      const id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, b.block)
+      data.qpos.set([b.x, b.y, b.z, 1, 0, 0, 0], model.jnt_qposadr[model.body_jntadr[id]])
+    }
+    data.qvel.fill(0)
+    mujoco.mj_forward(model, data)
+  }
 
   // The agent's log panel.
   const logEl = document.getElementById('log')
@@ -108,7 +147,8 @@ async function main() {
     logEl.innerHTML = ''
     log('you', notes ? `LoadProof plan · “${notes}”` : 'LoadProof plan')
     try {
-      await runAgent({ request, mujoco, model, robot, log, preview, reset })
+      const useRobot = document.getElementById('userobot').checked
+      await runAgent({ request, mujoco, model, robot, log, preview, reset, place: useRobot ? null : place })
     } catch (err) {
       log('fail', err.message === 'stopped' ? 'Stopped. Your hand is in charge again.' : 'Error: ' + err.message)
       console.error(err)
@@ -124,14 +164,8 @@ async function main() {
     if (agentBusy || truck.running) return
     reset()
     logEl.innerHTML = ''
-    const plan = workersStack(ORDER)
-    for (const b of plan.blocks) {
-      const id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, b.block)
-      const q = model.jnt_qposadr[model.body_jntadr[id]]
-      data.qpos.set([b.x, b.y, b.z, 1, 0, 0, 0], q)
-    }
-    data.qvel.fill(0)
-    mujoco.mj_forward(model, data)
+    const plan = workersStack(order)
+    place(plan)
     log('you', 'Rushed worker: boxes in the order they arrived, in columns')
     checkPlan(plan, { mujoco, model, log, preview: () => {} }, [], { all: true })
     log('info', 'It is standing on the table right now. Press 🚚 Truck test to see what the truck does to it.')
@@ -178,6 +212,7 @@ async function main() {
   const auto = new URLSearchParams(location.search).get('build')
   if (auto) { ask.value = auto; startBuild() }
   if (new URLSearchParams(location.search).has('worker')) document.getElementById('worker').click()
+  if (new URLSearchParams(location.search).has('editor')) document.getElementById('editor').classList.add('open')
 
   let last = performance.now()
   function frame(now) {
