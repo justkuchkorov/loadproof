@@ -7,6 +7,10 @@ phone) or a robot cell builds it.
 
 Team **Baxtiyor** (Abdurakhmon, Alyor) · GDG on Campus Debrecen — Agentic AI Hackathon, 21 November 2026.
 
+**▶ Demo video (1:42):** [pitch/loadproof-demo.mp4](pitch/loadproof-demo.mp4) — the agent plans and tests, the robot
+builds with its 3D camera, then the truck test: the rushed pallet falls, LoadProof's holds. **Deck (PDF):**
+[pitch/LoadProof_pitch_deck.pdf](pitch/LoadProof_pitch_deck.pdf)
+
 ![The LoadProof pallet and a rushed worker's pallet, same boxes, before the truck test](pitch/shots/compare.jpg)
 
 ## The problem
