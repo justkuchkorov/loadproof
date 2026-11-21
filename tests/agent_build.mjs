@@ -1,4 +1,5 @@
 // Node test: the real agent (Gemini design -> rule check -> physics check -> build -> measure -> fix)
+globalThis.NO_AI = !!process.env.NOAI // NOAI=1: the search plans, no Gemini (no quota used)
 globalThis.SELF_TOUCH = !!process.env.SELF
 globalThis.contactsOf = (mujoco, model, data, bodyName) => {
   const O = mujoco.mjtObj

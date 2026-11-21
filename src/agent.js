@@ -159,12 +159,14 @@ export async function build(plan, { robot, log, reset, feed }) {
       log('step', `${i + 1}/${n}: ${name}${fix ? ' — trying again' : ''}`)
       if (feed) await feed(b.block) // the conveyor brings it, if it is still waiting
       const r = await robot.pickPlace(b.block, dest)
-      if (!r.ok) { log('fail', `Could not grab the ${name} after ${r.tries} tries`); break }
+      if (r.dropped) { log('fail', `The vacuum lost the ${name}: it needed ${r.cupN} N, the cup holds ${robot.cupN} N — picking it up again`); continue }
+      if (!r.ok) { log('fail', `Could not grab the ${name} after ${r.tries} tries (no vacuum seal)`); break }
       // Measure: is it where it should be?
       const p = robot.P(b.block)
       const off = Math.hypot(p[0] - dest[0], p[1] - dest[1]) * 1000
+      const cup = r.cupN !== undefined ? ` · vacuum held ${r.cupN} of ${robot.cupN} N` : ''
       if (off < 15 && Math.abs(p[2] - dest[2]) < 0.006) {
-        log('ok', `Measured the ${name}: ${off.toFixed(0)} mm off, right height${r.tries > 1 ? ` (grab worked on try ${r.tries})` : ''}`)
+        log('ok', `Measured the ${name}: ${off.toFixed(0)} mm off, right height${cup}${r.tries > 1 ? ` (grab worked on try ${r.tries})` : ''}`)
         break
       }
       log('fail', `Measured the ${name}: ${cm(p[2])} cm high, should be ${cm(dest[2])} cm — fixing it`)
