@@ -198,6 +198,7 @@ export function checkPhysics(mujoco, model, plan) {
 }
 
 // Physics check 2, the truck test after EUMOS 40509: push at `g` for 0.5 s in each of four directions.
+// g: one value for every direction, or { forward, other } (road values of EN 12195-1: 0.8 forward, 0.5 otherwise).
 // Pass: every box moved less than 5% of the load's height.
 export const PUSH_DIRECTIONS = [['to the right', [0, -1]], ['to the left', [0, 1]], ['forward (braking)', [1, 0]], ['backward', [-1, 0]]]
 export function checkTransport(mujoco, model, plan, g = 0.5, { wrap = false } = {}) {
@@ -211,7 +212,8 @@ export function checkTransport(mujoco, model, plan, g = 0.5, { wrap = false } = 
       run(mujoco, model, d, 0.5)
       if (wrap) wrapBoxes(mujoco, model, d, plan.blocks.map((b) => b.block))
       const before = plan.blocks.map((b) => pos(b.block))
-      model.opt.gravity.set([dir[0] * g * 9.81, dir[1] * g * 9.81, -9.81]) // inside the truck, the push feels like tilted gravity
+      const gd = typeof g === 'number' ? g : name.startsWith('forward') ? g.forward : g.other
+      model.opt.gravity.set([dir[0] * gd * 9.81, dir[1] * gd * 9.81, -9.81]) // inside the truck, the push feels like tilted gravity
       run(mujoco, model, d, 0.5)
       model.opt.gravity.set(gravity)
       run(mujoco, model, d, 1.0)

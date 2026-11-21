@@ -6,7 +6,8 @@ import { createReach } from './reach.js'
 import { createGrasp, FIST } from './grasp.js'
 import { createRobot } from './robot.js'
 import { createArm, prepareArm } from './arm.js'
-import { runAgent, checkPlan, repair } from './agent.js'
+import { checkPlan, repair } from './agent.js'
+import { runLoadAgent, readOrder, quickPlan } from './loadagent.js'
 import { BLOCKS, setOrder } from './planner.js'
 import { ORDER, CATALOG, PALLET, PALLET_B, sceneXml, workersStack, orderFrom, randomOrder, copyId, wrapBoxes, setCell, armXml } from './pallet.js'
 import { createTruckTest } from './truck.js'
@@ -173,20 +174,48 @@ async function main() {
   const ask = document.getElementById('ask')
   const buildButton = document.getElementById('build')
   const stopButton = document.getElementById('stop')
+  // The agent: reads a free-text order (a new order sets the cell up again: page reload, then it goes on), then plans,
+  // tests, secures and builds through its tools (loadagent.js).
+  const CONT = 'loadproof.continue'
   async function startBuild() {
-    const notes = ask.value.trim()
-    const request = 'Plan the pallet for this order so it passes the 0.5 g truck test.' + (notes ? ' Extra wishes: ' + notes : '')
     if (agentBusy) return
+    const text = ask.value.trim()
     agentBusy = true
     parked = false
     buildButton.disabled = true
     logEl.innerHTML = ''
-    log('you', notes ? `LoadProof plan · “${notes}”` : 'LoadProof plan')
-    if (memory.stats().lessons) log('info', `🧠 Sent the AI ${memory.stats().lessons} lessons from ${memory.stats().tested} earlier checked plans`)
     try {
+      let instructions = ''
+      let cont = null
+      try { cont = JSON.parse(sessionStorage.getItem(CONT) ?? 'null'); sessionStorage.removeItem(CONT) } catch { /* no storage */ }
+      if (cont) {
+        for (const [kind, line] of cont.lines) log(kind, line)
+        log('ok', `The cell is set up for this order: ${labelsOfOrder.join(', ')}`)
+        instructions = cont.instructions
+      } else if (text) {
+        log('you', `“${text}”`)
+        if (globalThis.NO_AI) { instructions = text; log('info', 'No AI: your text goes to the fixed steps as instructions; the order stays as it is') }
+        else {
+          log('step', '🧠 Agent → reading the order…')
+          try {
+            const r = await readOrder(text)
+            log('ok', `Read the order (${r.model}): ${r.labels.join(', ') || 'no catalogue products'}${r.missing.length ? ` · not in the catalogue: ${r.missing.join(', ')}` : ''}`)
+            if (r.instructions) log('info', `Instructions for the agent: ${r.instructions}`)
+            instructions = r.instructions
+            const same = [...r.labels].sort().join(',') === [...labelsOfOrder].sort().join(',')
+            if (r.labels.length && !same) {
+              log('step', 'Setting up the cell for this order…')
+              try { sessionStorage.setItem(CONT, JSON.stringify({ instructions, lines: [...logEl.children].map((li) => [li.className, li.textContent]) })) } catch { /* no storage */ }
+              location.hash = 'order=' + r.labels.join(',')
+              location.reload()
+              return
+            }
+          } catch (err) { instructions = text; log('fail', `Could not read the order (${err.message}); your text goes on as instructions`) }
+        }
+      } else log('you', 'LoadProof: plan, test, secure and build this order')
       const useRobot = document.getElementById('userobot').checked
-      const plan = await runAgent({ request: request + memory.promptText(labelsOfOrder), mujoco, model, robot, log, preview, reset, place: useRobot ? null : place, onChecked: remember('AI') })
-      if (plan) { lastGoodPlan = plan; truck.forget() }
+      const state = await runLoadAgent({ instructions, mujoco, model, robot, log, preview, reset, place: useRobot ? null : place, wrap: wrapLoad, onChecked: remember('AI') })
+      if (state?.builtPlan) { lastGoodPlan = state.builtPlan; truck.forget() }
     } catch (err) {
       log('fail', err.message === 'stopped' ? 'Stopped. Your hand is in charge again.' : 'Error: ' + err.message)
       console.error(err)
@@ -219,7 +248,7 @@ async function main() {
     log('you', 'Compare: rushed worker (right) against LoadProof (left), same boxes')
     try {
       if (!lastGoodPlan) {
-        lastGoodPlan = await runAgent({ request: 'Plan the pallet for this order so it passes the 0.5 g truck test.' + memory.promptText(labelsOfOrder), mujoco, model, robot, log, preview, reset, place: () => {}, onChecked: remember('AI') })
+        lastGoodPlan = await quickPlan({ mujoco, model, robot, log, preview, reset, place, wrap: wrapLoad, onChecked: remember('search') })
         preview(null)
       }
       if (!lastGoodPlan) throw new Error('no LoadProof plan passed the checks')
@@ -279,6 +308,11 @@ async function main() {
   document.getElementById('wrap').onclick = () => {
     if (agentBusy || truck.running) return
     if (unwrap) { unwrap(); unwrap = null; films.clear(); log('info', '🎞 Wrap removed'); return }
+    wrapLoad()
+  }
+  // Wrap what stands on the pallets (the button, and the agent when it decides to wrap).
+  function wrapLoad() {
+    if (unwrap) return
     const all = Object.keys(BLOCKS).flatMap((n) => [n, copyId(n)])
     const loads = [PALLET, PALLET_B].map((pal) => all.filter((n) => { const p = robot.P(n); return Math.abs(p[0] - pal.x) < 0.12 && Math.abs(p[1] - pal.y) < 0.13 && p[2] > 0 }))
     const names = loads.flat()
@@ -382,6 +416,7 @@ async function main() {
   if (new URLSearchParams(location.search).has('autostart')) startButton.click()
   const auto = new URLSearchParams(location.search).get('build')
   if (auto) { ask.value = auto; startBuild() }
+  else { let next = null; try { next = sessionStorage.getItem(CONT) } catch { /* no storage */ } if (next) startBuild() } // the agent goes on after setting up the cell
   if (new URLSearchParams(location.search).has('worker')) document.getElementById('worker').click()
   if (new URLSearchParams(location.search).has('compare')) document.getElementById('compare').onclick().then(() => { if (new URLSearchParams(location.search).has('truck')) document.getElementById('truck').click() })
   if (new URLSearchParams(location.search).has('dowrap')) document.getElementById('wrap').click()

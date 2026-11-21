@@ -176,7 +176,7 @@ export async function build(plan, { robot, log, reset, feed }) {
   await robot.home()
   // Final check: measure every box once more. A box knocked while placing a later one is found and put back.
   log('step', 'Final check: measuring every box against the plan')
-  await repair(plan, { robot, log })
+  return repair(plan, { robot, log })
 }
 
 // Layer by layer; inside a layer the NEAR row first, inside a row the RIGHT box first (see build()).

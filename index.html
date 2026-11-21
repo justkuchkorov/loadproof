@@ -82,10 +82,10 @@
     </div>
     <div class="row">
       <button id="worker" title="Stack the boxes the way a rushed worker would: in the order they arrived, in columns">👷 Rushed worker</button>
-      <button id="build" title="The AI plans the pallet; the plan must pass the rules, stand, and pass the 0.5 g truck test before the robot builds it">🤖 LoadProof: plan &amp; build</button>
+      <button id="build" title="The agent reads the order, plans with the search, tests in physics (EU 0.5 g, hard braking 0.8 g), decides on wrap and straps, and has the robot build it">🤖 LoadProof: plan &amp; build</button>
     </div>
     <div class="row" style="margin-top: 6px">
-      <input id="ask" placeholder="Extra wishes (optional), e.g. chips on top" autocomplete="off">
+      <input id="ask" placeholder="Paste an order or say what matters, e.g. &quot;Spar: 2 water, 2 cans, rice, cereal, 2 chips (they crush) — motorway trip&quot;" autocomplete="off">
       <label class="dim toggle"><input type="checkbox" id="userobot" checked> 🦾 robot builds it</label>
       <button id="stop">Stop</button>
     </div>
