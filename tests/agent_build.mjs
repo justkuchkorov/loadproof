@@ -5,6 +5,7 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+if (process.env.UP === '0') globalThis.FINGERS_UP = false
 globalThis.GEMINI_KEY = fs.readFileSync(path.join(root, '.env.local'), 'utf8').match(/^VITE_GEMINI_API_KEY=(.*)$/m)[1].trim()
 const { default: loadMujoco } = await import('../node_modules/@mujoco/mujoco/mujoco.js')
 const { createRobot } = await import('../src/robot.js')
@@ -22,16 +23,16 @@ mujoco.mj_forward(model, data)
 const robot = createRobot({ mujoco, model, data, debug: (s) => console.log('         robot:', s) })
 
 let running = true
-const dt = 1 / 60
+const DT = 1 / 60
 ;(async () => { // the "browser frames": tick the robot, step physics, yield so the agent's promises can run
   while (running) {
+    const dt = process.env.JITTER ? (1 / 120 + Math.random() * (1 / 30 - 1 / 120)) : DT // uneven frames, like a busy browser
     robot.tick(dt)
     for (let i = 0; i < Math.round(dt / model.opt.timestep); i++) mujoco.mj_step(model, data)
     await new Promise((r) => setImmediate(r))
   }
 })()
-const { bring, waiting } = await import('../src/pallet.js')
-const feed = async (id) => { if (waiting(mujoco, model, data, id)) { bring(mujoco, model, data, id); await new Promise((r) => setTimeout(r, 30)) } }
+const feed = undefined // no conveyor: the robot picks from the waiting group itself
 const reset = () => { robot.stop(); const m = Array.from(data.mocap_pos.subarray(0, 3)); mujoco.mj_resetData(model, data); data.mocap_pos.set(m); mujoco.mj_forward(model, data) }
 const t0 = Date.now()
 if (process.argv[2] === '--plan-file') {

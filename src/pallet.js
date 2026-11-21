@@ -21,23 +21,22 @@ export const ORDER = [
 export const size = (b) => b.cm.map((c) => c / 100 / SCALE)
 export const mass = (b) => b.kg / SCALE ** 3
 
-// Boxes wait off the table, on the floor far away (out of view). A conveyor at the right side of the table brings
-// the next box to the pick spot, so nothing ever stands behind the box being picked (the forearm would hit it).
-export const CONVEYOR = { x: 0.12, y0: -0.45, y1: -0.19, pick: [0.12, -0.27] }
-export const FLOOR = -0.75
-export const STAGING_Y = 0.2 // boxes wait on the left side of the table (y > 0.2), where the robot never works
+// The boxes of the order wait together on the left side of the table (y > 0.2); the robot finds and picks each box
+// itself, in the order the plan needs. Gaps are wide enough that the open fingers and thumb clear the neighbours.
+export const STAGING_Y = 0.2
 
-// Waiting spots on the table, in order: rows along x with 2 cm gaps, a new row when the table ends.
+// Waiting spots on the table, in order: rows along x with 8 cm gaps (7 cm between rows), a new row when the table ends.
+// The open fingers reach about 8 cm forward and the thumb about 9 cm to the left, so neighbours stay clear.
 export function stagingSpots(order = ORDER) {
   const spots = {}
-  let x = 0.02
+  let x = -0.1
   let rowY = STAGING_Y
   let rowDepth = 0
   for (const b of order) {
     const [sx, sy] = size(b)
-    if (x + sx > 0.52) { rowY += rowDepth + 0.03; x = 0.02; rowDepth = 0 }
+    if (x + sx > 0.56) { rowY += rowDepth + 0.07; x = -0.1; rowDepth = 0 }
     spots[b.id] = [x + sx / 2, rowY + sy / 2]
-    x += sx + 0.02
+    x += sx + 0.08
     rowDepth = Math.max(rowDepth, sy)
   }
   return spots
@@ -67,7 +66,6 @@ export function sceneXml(order = ORDER) {
     <light pos="0.3 0 1.5" dir="0 0 -1" directional="true"/>
     <geom name="floor" pos="0 0 -0.75" size="0 0 0.05" type="plane" rgba="0.2 0.3 0.4 1"/>
     <geom name="table" type="box" size="0.35 0.6 0.02" pos="0.2 0.05 -0.02" rgba="0.42 0.45 0.48 1" friction="1 0.01 0.001"/>
-    <geom name="conveyor" type="box" size="0.05 ${(CONVEYOR.y1 - CONVEYOR.y0) / 2} 0.003" pos="${CONVEYOR.x} ${(CONVEYOR.y0 + CONVEYOR.y1) / 2} 0.003" rgba="0.15 0.16 0.18 1" friction="${FRICTION} 0.005 0.0005"/>
     <geom name="pallet" type="box" size="${PALLET.sx / 2} ${PALLET.sy / 2} ${PALLET.top / 2}" pos="${PALLET.x} ${PALLET.y} ${PALLET.top / 2}" rgba="0.76 0.6 0.38 1" friction="${FRICTION} 0.005 0.0005"/>
     <body name="hand_target" mocap="true" pos="-0.2 0 0.15" quat="1 0 1 0"/>
 ${boxes}
@@ -115,17 +113,6 @@ export const SPOTS = {
   small: { 'near-left': [ROWS.near, COLS.left], 'near-right': [ROWS.near, COLS.right], 'far-left': [ROWS.far, COLS.left], 'far-right': [ROWS.far, COLS.right] },
   wide: { 'left column': [PALLET.x, COLS.left], 'right column': [PALLET.x, COLS.right] },
   long: { 'near row': [ROWS.near, PALLET.y], 'far row': [ROWS.far, PALLET.y] },
-}
-
-// Put a box on the conveyor's pick spot, standing still. (The conveyor itself is not simulated: the box arrives.)
-export function bring(mujoco, model, data, id, order = ORDER) {
-  const b = order.find((o) => o.id === id)
-  const body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, id)
-  const q = model.jnt_qposadr[model.body_jntadr[body]]
-  const v = model.jnt_dofadr[model.body_jntadr[body]]
-  data.qpos.set([CONVEYOR.pick[0], CONVEYOR.pick[1], 0.006 + size(b)[2] / 2, 1, 0, 0, 0], q)
-  data.qvel.set([0, 0, 0, 0, 0, 0], v)
-  mujoco.mj_forward(model, data)
 }
 
 // Is this box still waiting (in the staging area on the left)?

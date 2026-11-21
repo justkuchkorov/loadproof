@@ -7,7 +7,7 @@ import { createGrasp, FIST } from './grasp.js'
 import { createRobot } from './robot.js'
 import { runAgent, checkPlan } from './agent.js'
 import { BLOCKS } from './planner.js'
-import { ORDER, sceneXml, bring, waiting, workersStack } from './pallet.js'
+import { ORDER, sceneXml, workersStack } from './pallet.js'
 import { createTruckTest } from './truck.js'
 
 const status = document.getElementById('status')
@@ -37,7 +37,7 @@ async function main() {
   const graspSite = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE.value, 'grasp_site')
   const offset = [0, 1, 2].map((k) => data.site_xpos[3 * graspSite + k] - data.mocap_pos[k])
   const move = Array.from(data.mocap_pos.subarray(0, 3))
-  const PARK = [0.1 - offset[0], -0.32 - offset[1], 0.34 - offset[2]] // hand parked high above the conveyor, clear of the boxes and the pallet
+  const PARK = [0.1 - offset[0], -0.32 - offset[1], 0.34 - offset[2]] // hand parked high on the right, clear of the boxes and the pallet
   const reach = createReach()
   const grasp = createGrasp({ mujoco, model, data, objects: Object.keys(BLOCKS) })
   const robot = createRobot({ mujoco, model, data })
@@ -84,9 +84,6 @@ async function main() {
   document.getElementById('order').innerHTML = ORDER.map((b) =>
     `<li><b>${b.label}</b> ${b.kg} kg${b.fragile ? ' <span class="fragile">FRAGILE</span>' : ''} <span class="dim">${b.cm.join('×')} cm</span></li>`).join('')
 
-  // The conveyor brings a box to the pick spot when the robot needs it.
-  const feed = async (id) => { if (waiting(mujoco, model, data, id)) bring(mujoco, model, data, id) }
-
   // The agent's log panel.
   const logEl = document.getElementById('log')
   function log(kind, text) {
@@ -111,7 +108,7 @@ async function main() {
     logEl.innerHTML = ''
     log('you', notes ? `LoadProof plan · “${notes}”` : 'LoadProof plan')
     try {
-      await runAgent({ request, mujoco, model, robot, log, preview, reset, feed })
+      await runAgent({ request, mujoco, model, robot, log, preview, reset })
     } catch (err) {
       log('fail', err.message === 'stopped' ? 'Stopped. Your hand is in charge again.' : 'Error: ' + err.message)
       console.error(err)

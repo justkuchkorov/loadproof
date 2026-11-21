@@ -35,6 +35,7 @@ export function createRobot({ mujoco, model, data, debug = () => {} }) {
     for (let k = 0; k < 3; k++) data.mocap_pos[k] = goal[k] - offset[k]
     for (let i = 0; i < model.nu; i++) data.ctrl[i] = 0
     if (fingers === 'fist') for (const [n, v] of Object.entries(FIST)) data.ctrl[actuator[n]] = v
+    if (fingers === 'up') for (const f of ['FF', 'MF', 'RF', 'LF']) data.ctrl[actuator[`rh_A_${f}J3`]] = -0.26 // bent slightly up: weak fingers droop
   }
 
   const check = () => { if (stopped) throw new Error('stopped') }
@@ -54,7 +55,11 @@ export function createRobot({ mujoco, model, data, debug = () => {} }) {
     const e = eq(n)
     const o = body(n)
     const rel = qrot(qconj(Q(palm)), [0, 1, 2].map((k) => data.xpos[3 * o + k] - data.xpos[3 * palm + k]))
-    const rq = qmul(qconj(Q(palm)), Q(o))
+    // Hold the box LEVEL (keep only its turn about the vertical), like a suction pad squares a box against it:
+    // a box that was knocked slightly crooked is straightened, so it cannot spoil the stack.
+    const q = Q(o)
+    const yaw = Math.atan2(2 * (q[0] * q[3] + q[1] * q[2]), 1 - 2 * (q[2] * q[2] + q[3] * q[3]))
+    const rq = qmul(qconj(Q(palm)), [Math.cos(yaw / 2), 0, 0, Math.sin(yaw / 2)])
     const a = mujoco.mjNEQDATA * e // 12 numbers per constraint in MuJoCo 4.0
     const d = model.eq_data
     d.set([0, 0, 0, ...rel, ...rq, 1], a)
@@ -108,7 +113,7 @@ export function createRobot({ mujoco, model, data, debug = () => {} }) {
     { const s = S(); const o = P(obj); await moveTo([dest[0] + s[0] - o[0], dest[1] + s[1] - o[1], dest[2] + s[2] - o[2] + 0.06], 0.9) }
     await settle(0.06, 3)
     await glide(toward(0.03), 0.5)
-    fingers = 'open'      // the grip assist holds the block, so the fingers can open: they would hit the table
+    fingers = globalThis.FINGERS_UP === false ? 'open' : 'up' // the grip assist holds the block, so the fingers can open (bent slightly up, against their droop)
     await wait(0.5)
     await settle(0.03, 2)
     await glide(toward(0.002), 0.6) // same sag as at 3 cm, so the last 2.8 cm come out right
