@@ -1,0 +1,8 @@
+[
+  { "name": "WATER", "firmness": "hard", "cm": [60, 40, 25], "kg": 12 },
+  { "name": "WATER", "firmness": "hard", "cm": [60, 40, 25], "kg": 12 },
+  { "name": "RICE", "firmness": "hard", "cm": [30, 40, 25], "kg": 10 },
+  { "name": "RICE", "firmness": "hard", "cm": [30, 40, 25], "kg": 10 },
+  { "name": "TINS", "firmness": "hard", "cm": [30, 80, 20], "kg": 8 },
+  { "name": "GLASSES", "firmness": "soft", "cm": [30, 40, 30], "kg": 4 }
+]
