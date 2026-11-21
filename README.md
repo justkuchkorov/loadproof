@@ -82,6 +82,26 @@ Tests (Node, same physics, no browser): `node tests/securing.mjs`, `node tests/l
 - LoadProof trusts the box data (weight, size); a real cell adds a scale on the conveyor.
 - UR10e payload is 12.5 kg (UR datasheet): heavier boxes need a bigger arm (UR20) or a person.
 
+## Tools we used
+
+- **AI coding assistant: Claude Code (Anthropic)** wrote most of the code from our instructions; we chose the
+  direction, tested every step, and found and reported the bugs (for example the robot pushing boxes, the wrong
+  label numbers, the truck test that was too soft).
+- **Google Gemini API** (gemini-3.5-flash-lite / gemini-3.8-flash): reads free-text orders and runs the agent
+  through function calling. Without it, fixed steps call the same tools.
+- **MuJoCo 4 (WebAssembly)** for the physics, **three.js** for drawing, **Vite** dev server (it also relays the phone
+  remote and keeps the box list), **MediaPipe** (only in the first, robot-hand version), **qrcode-generator**.
+- Models: UR10e and Shadow Hand from **MuJoCo Menagerie**.
+
+## When it was built (from the git history)
+
+- **Before the hackathon started (the evening of 20 November and the morning of 21 November, 34 commits):** the
+  first version with a robot hand, the Gemini planner, the physics checks and truck test, Compare, the report, and
+  the UR10e cell.
+- **During the hackathon (from 11:00 on 21 November, 27 commits):** the agent that works through tools, the honest
+  vacuum cup, the 3D camera, the truck tests with EN 12195-1 road values, the strap count, worker mode, the phone
+  remote, your own boxes with QR labels and the loading sheet, the fixes from our tests, this README.
+
 ## Credits
 
 [MuJoCo](https://github.com/google-deepmind/mujoco) and [MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie)
