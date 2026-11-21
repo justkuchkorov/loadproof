@@ -29,8 +29,10 @@ const mujoco = await loadMujoco()
 const { orderFrom } = await import('../src/pallet.js')
 const { setOrder } = await import('../src/planner.js')
 const ORDER_ENV = process.env.ORDER ? orderFrom(process.env.ORDER.split(',')) : undefined // a custom order, e.g. ORDER=WATER,WATER,CHIPS
-if (ORDER_ENV) setOrder(ORDER_ENV)
-const { model, createRobot } = await loadScene(mujoco, ORDER_ENV)
+// BOXES='[{"name":"WATER","firmness":"hard","cm":[60,40,25],"kg":12}, ...]': your own boxes, as from boxes.html
+const BOXES_ENV = process.env.BOXES ? JSON.parse(process.env.BOXES).map((b, i) => ({ id: `b${i + 1}`, label: b.name, kg: b.kg, fragile: b.firmness === 'soft', firmness: b.firmness, cm: b.cm, num: i + 1 })) : undefined
+if (ORDER_ENV || BOXES_ENV) setOrder(BOXES_ENV ?? ORDER_ENV)
+const { model, createRobot } = await loadScene(mujoco, BOXES_ENV ?? ORDER_ENV)
 const data = new mujoco.MjData(model)
 require_park: { const { parkArm } = await import("../src/pallet.js"); parkArm(mujoco, model, data) }
 mujoco.mj_forward(model, data)
@@ -38,6 +40,19 @@ const { createCamera } = await import('../src/camera.js')
 const eye = process.env.EYE ? createCamera({ mujoco, model, data }) : null // EYE=1: the robot finds boxes with the depth camera
 const robot = createRobot({ mujoco, model, data, eye, debug: (s) => console.log('         robot:', s) })
 
+// MOVES=1: after each placement, which boxes already placed moved, and by how much (real mm)
+if (process.env.MOVES) {
+  const placedAt = {}
+  const pp = robot.pickPlace
+  robot.pickPlace = async (id, dest, o) => {
+    const r = await pp(id, dest, o)
+    const moved = Object.entries(placedAt).map(([n, p]) => [n, Math.hypot(...robot.P(n).map((v, k) => v - p[k])) * 5000]).filter(([, d]) => d > 3)
+    if (moved.length) console.log(`         MOVES while placing ${id}: ` + moved.map(([n, d]) => `${n} ${d.toFixed(0)} mm`).join(', '))
+    placedAt[id] = robot.P(id)
+    for (const n of Object.keys(placedAt)) placedAt[n] = robot.P(n)
+    return r
+  }
+}
 let running = true
 const DT = 1 / 60
 const HZ = Number(process.env.HZ || 0) // HZ=144: a fast screen, frames 1/144 s +-15 %
@@ -49,7 +64,7 @@ let carry = 0 // as sim.advance in the browser: whole physics steps, the remaind
     carry -= dt
     if (dt > 0) robot.tick(dt)
     if (process.env.TRACE && (globalThis.tt = (globalThis.tt ?? 0) + 1) % 10 === 0 && (robot.phase.holding === process.env.TRACE || globalThis.tracing)) { globalThis.tracing = robot.phase.holding === process.env.TRACE || (globalThis.tracing && globalThis.tt % 600 !== 0); const b = robot.P(process.env.TRACE); console.log("         TRACE goal", robot.phase.goal, "pad", robot.S().map((v) => v.toFixed(3)).join(","), "box", b.map((v) => v.toFixed(3)).join(","), "ik", robot.phase.ikErr, "touch", robot.touching(), "| qerr", robot.phase.q.split(" ").map((v, i) => (Number(v) - data.qpos[i]).toFixed(2)).join(" "), "| force", Array.from(data.actuator_force.slice(0, 6)).map((v) => v.toFixed(3)).join(" "), "| b4 contacts", contactsOf(mujoco, model, data, process.env.TRACE)) }
-    if (process.env.WATCH) { const w = process.env.WATCH, p = robot.P(w); const prev = globalThis.wp; if (prev && robot.phase.holding !== w && Math.hypot(p[0] - prev[0], p[1] - prev[1], p[2] - prev[2]) > 0.0015) console.log("         MOVED", w, prev.map((v) => v.toFixed(3)).join(","), "->", p.map((v) => v.toFixed(3)).join(","), "| goal", robot.phase.goal, "holding", robot.phase.holding, "ik", robot.phase.ikErr, robot.phase.q, "| pad", robot.S().map((v) => v.toFixed(3)).join(","), "| touch", robot.touching()); globalThis.wp = p }
+    if (process.env.WATCH) { const w = process.env.WATCH, p = robot.P(w); const prev = globalThis.wp; if (prev && robot.phase.holding !== w && Math.hypot(p[0] - prev[0], p[1] - prev[1], p[2] - prev[2]) > 0.0015) console.log("         MOVED", w, prev.map((v) => v.toFixed(3)).join(","), "->", p.map((v) => v.toFixed(3)).join(","), "| goal", robot.phase.goal, "holding", robot.phase.holding, "ik", robot.phase.ikErr, robot.phase.q, "| pad", robot.S().map((v) => v.toFixed(3)).join(","), "| touch", robot.touching(), "| its contacts", contactsOf(mujoco, model, data, w), "| held", robot.phase.holding && robot.P(robot.phase.holding).map((v) => v.toFixed(3)).join(","), "yaw", robot.phase.holding && (() => { const b = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, robot.phase.holding), q = [0, 1, 2, 3].map((k) => data.xquat[4 * b + k]); return (Math.atan2(2 * (q[0] * q[3] + q[1] * q[2]), 1 - 2 * (q[2] * q[2] + q[3] * q[3])) * 180 / Math.PI).toFixed(0) })(), "| cmd q", robot.phase.q, "| real q", ["shoulder_pan_joint","shoulder_lift_joint","elbow_joint","wrist_1_joint","wrist_2_joint","wrist_3_joint"].map((j) => data.qpos[model.jnt_qposadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT.value, j)]].toFixed(2)).join(" "), "pad yaw", (() => { const s = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE.value, "grasp_site"), R = data.site_xmat.subarray(9 * s, 9 * s + 9); return (Math.atan2(R[1], R[0]) * 180 / Math.PI).toFixed(0) })()); globalThis.wp = p }
     if (process.env.TOUCH && (globalThis.nt = (globalThis.nt ?? 0) + 1) % 12 === 0) { const tc = robot.touching(); if (tc && tc !== globalThis.lastTouch) console.log("         touch:", tc, "| goal", robot.phase.goal, "holding", robot.phase.holding); globalThis.lastTouch = tc }
     for (let i = 0; i < n; i++) mujoco.mj_step(model, data)
     if (process.env.ARMZ) { // lowest height each arm part reaches, and when (ARMZ=1)
