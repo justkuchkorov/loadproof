@@ -15,6 +15,14 @@ speaker notes of every slide. Plain English: the presenter is not a native speak
   leave this placeholder].
 
 ## The project: LoadProof — "Prove the pallet before the truck leaves"
+
+**The framing (after a mentor's feedback: "it looks like an idea, not a product you can use"): usable today with a
+phone, ready for robots tomorrow.**
+- **Today, any warehouse, no robot:** the worker adds each box on the phone (name, fragility soft/mid/hard, footprint
+  on the standard 60 × 40 module, height, weight) and prints a label with a QR code. LoadProof plans the pallet, tests it
+  in the truck simulation, and gives a **loading sheet** on the phone: step by step which box goes where, then wrap and
+  straps; the worker ticks each step. Scanning a box's QR code with the phone camera shows what is inside and its step.
+- **Tomorrow, where there is a robot:** the same plan drives the UR10e cell (the simulation shows it).
 LoadProof is the brain of a robot palletizing cell. An AI agent reads an order, plans how to stack the boxes on a pallet,
 tests the plan in a physics simulation like a truck braking and swerving, decides how to secure it (stretch wrap,
 straps), and then a robot arm builds it. Every pallet gets a proof sheet. Nothing is built before it is proven.
@@ -93,10 +101,12 @@ straps), and then a robot arm builds it. Every pallet gets a proof sheet. Nothin
 - Show the webcam real boxes and let the AI recognise them into an order.
 
 ## Slide plan
-1. Title — "LoadProof — prove the pallet before the truck leaves." Event, team.
+1. Title — "LoadProof — prove the pallet before the truck leaves." Subtitle: "Usable today with a phone, ready for
+   robots tomorrow." Event, team.
 2. The problem — the 25% number big; $388 M and 60% smaller under it. Picture: the rushed pallet falling (screenshot).
 3. Why it still happens — planned by hand or by geometry tools; the EU test is in a lab, after the pallet exists.
-4. LoadProof in one picture — the flow: order → agent → physics tests → secure → robot + camera → proof sheet.
+4. LoadProof in one picture — boxes in (phone: add box, QR label) → agent → physics truck tests → wrap and straps →
+   loading sheet on the phone (a person loads) or the robot builds it → proof sheet.
 5. The agent at work — the real log of one run (shorten it): plan → EU test failed → wrap → passed → 1 strap → build.
 6. Physics proof — the wrapped/unwrapped table; "nothing is built before it passes".
 7. The robot cell — UR10e 1:5 digital twin, 3D camera, vacuum cup with a force limit; picture of the cell.
