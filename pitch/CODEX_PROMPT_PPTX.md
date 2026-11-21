@@ -55,6 +55,16 @@ straps), and then a robot arm builds it. Every pallet gets a proof sheet. Nothin
 4. **Proof sheet** — a printable report: the stacking plan by layer, every test with its numbers (before and after
    wrapping), wrap, straps, and the instructions the agent followed.
 5. **If the AI is not available**, fixed steps call the same tools, so the cell never stops.
+6. **Worker mode — a person decides, LoadProof checks.** The worker chooses a box and a spot (a click on the laptop, or a
+   tap on the phone remote). LoadProof shows its own suggestion (green, starred), checks the worker's choice against the
+   warehouse rules and the robot's reach before the robot moves (red, with the reason: "rests on fragile CHIPS", "the
+   robot's arm would reach over the CANS behind it"), and says which box comes next. The robot places it. A worker who
+   follows LoadProof builds exactly the checked plan; it passed the EU test (our tests).
+7. **Phone remote** — the worker's phone becomes a handheld terminal (like the scanners warehouse workers carry): AI
+   builds, I choose, stop, truck test, wrap; the boxes and a pallet picture with every spot coloured by LoadProof's verdict.
+8. **What we tried and dropped:** steering the robot with your own hand through the webcam. A 2D webcam cannot give good
+   control in 3D. Our conclusion: a physical remote is the right way — a phone today, and next a small copy of the arm
+   that the worker moves and the big arm follows (leader–follower arms, as in the ALOHA and GELLO research projects).
 
 ### Results from our own tests (mark these "our tests" on the slides)
 - A real Gemini run on the demo order (8 boxes, 57 kg of goods): EU test FAILED unwrapped (the chips fell off the back)
@@ -77,8 +87,8 @@ straps), and then a robot arm builds it. Every pallet gets a proof sheet. Nothin
 
 ### Next steps
 - A manager page: every pallet live — planned, built, tested, wrapped, ready — with the agent's reasons.
-- Manual takeover: a worker steers the robot with their own hand through the webcam (a backup when the AI or the cell
-  needs a person — like a manual control next to every automatic one).
+- A small leader arm as the physical remote: the worker moves it, the UR10e follows — the manual control next to the
+  automatic one ("wherever there is an electrical controller, there should be a mechanical one").
 - A real tray test with real boxes, to compare the simulation with reality.
 - Show the webcam real boxes and let the AI recognise them into an order.
 
@@ -90,8 +100,9 @@ straps), and then a robot arm builds it. Every pallet gets a proof sheet. Nothin
 5. The agent at work — the real log of one run (shorten it): plan → EU test failed → wrap → passed → 1 strap → build.
 6. Physics proof — the wrapped/unwrapped table; "nothing is built before it passes".
 7. The robot cell — UR10e 1:5 digital twin, 3D camera, vacuum cup with a force limit; picture of the cell.
-8. The proof sheet and the manager view — the report screenshot; a simple mock-up of a manager page (pallet cards:
-   planned / built / tested / wrapped / ready).
+8. People stay in control — worker mode and the phone remote (screenshot of the phone page), the proof sheet, and a
+   simple mock-up of a manager page (pallet cards: planned / built / tested / wrapped / ready). One line: "we tried the
+   webcam; a 2D camera cannot steer in 3D — a physical remote is the right way".
 9. Honest limits and next steps.
 10. Live demo — "Type an order. Watch it get proven." + thanks.
 
