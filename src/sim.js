@@ -107,7 +107,20 @@ export async function createSim(container, { xml, labels = {}, arm = false, armX
     renderer.render(scene, camera)
   }
 
-  return { mujoco, model, data, scene, camera, advance, step, render }
+  // What is under the mouse: the geom and body names, and the point hit (for clicking boxes and pallet spots).
+  const raycaster = new THREE.Raycaster()
+  function pickAt(clientX, clientY) {
+    const r = renderer.domElement.getBoundingClientRect()
+    raycaster.setFromCamera(new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1), camera)
+    const shown = meshes.filter((m) => m.mesh.visible)
+    const hit = raycaster.intersectObjects(shown.map((m) => m.mesh), false)[0]
+    if (!hit) return null
+    const id = shown.find((m) => m.mesh === hit.object).id
+    const O = mujoco.mjtObj
+    return { geom: mujoco.mj_id2name(model, O.mjOBJ_GEOM.value, id), body: mujoco.mj_id2name(model, O.mjOBJ_BODY.value, model.geom_bodyid[id]), point: [hit.point.x, hit.point.y, hit.point.z] }
+  }
+
+  return { mujoco, model, data, scene, camera, canvas: renderer.domElement, advance, step, render, pickAt }
 }
 
 function buildMeshes(mujoco, model, scene, labels) {

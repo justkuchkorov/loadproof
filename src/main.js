@@ -7,6 +7,7 @@ import { createGrasp, FIST } from './grasp.js'
 import { createRobot } from './robot.js'
 import { createArm, prepareArm } from './arm.js'
 import { createCamera } from './camera.js'
+import { createWorker } from './worker.js'
 import { checkPlan } from './agent.js'
 import { runLoadAgent, readOrder, quickPlan } from './loadagent.js'
 import { BLOCKS, setOrder } from './planner.js'
@@ -316,6 +317,7 @@ async function main() {
   sim.scene.add(films)
   let unwrap = null
   document.getElementById('wrap').onclick = () => {
+    if (worker && !worker.busy) endWorker()
     if (agentBusy || truck.running) return
     if (unwrap) { unwrap(); unwrap = null; films.clear(); log('info', '🎞 Wrap removed'); return }
     wrapLoad()
@@ -359,6 +361,7 @@ async function main() {
   const truck = createTruckTest({ mujoco, model, data, scene: sim.scene, log })
   const truckButton = document.getElementById('truck')
   truckButton.onclick = () => {
+    if (worker && !worker.busy) endWorker() // the worker's stack goes to the truck test
     if (agentBusy || truck.running) return
     logEl.innerHTML = ''
     if (truck.start(Number(gSlider.value))) parked = true
@@ -399,6 +402,35 @@ async function main() {
     }
   }
 
+  // 👆 You choose (worker mode): the worker clicks a box, then a spot; LoadProof suggests and checks, the robot places.
+  let worker = null
+  const workerButton = document.getElementById('youchoose')
+  if (!ARM_CELL) workerButton.style.display = 'none'
+  async function startWorker() {
+    if (worker) { endWorker(); log('info', '👆 Worker mode ended'); return }
+    if (agentBusy || truck.running) return
+    agentBusy = true
+    logEl.innerHTML = ''
+    log('you', '👆 Worker mode: you choose the box and the spot, the robot places it, LoadProof checks every choice')
+    reset()
+    let suggestion = lastGoodPlan
+    if (!suggestion) { log('step', 'LoadProof prepares its suggestions (search + EU test, no AI)…'); suggestion = await quickPlan({ mujoco, model, robot, log: () => {}, preview, reset, place, wrap: wrapLoad, onChecked: remember('search') }); preview(null) }
+    worker = createWorker({ robot, log, preview, suggestion })
+    workerButton.textContent = '👆 End worker mode'
+    log('info', 'Click a box on the table.')
+  }
+  workerButton.onclick = startWorker
+  function endWorker() { worker?.stop(); worker = null; agentBusy = false; workerButton.textContent = '👆 You choose' }
+  // A click (not a drag) on the 3D view: a waiting box selects it; a point on the pallet chooses the spot.
+  let downAt = null
+  sim.canvas.addEventListener('pointerdown', (e) => { downAt = [e.clientX, e.clientY] })
+  sim.canvas.addEventListener('pointerup', (e) => {
+    if (!worker || !downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) return
+    const hit = sim.pickAt(e.clientX, e.clientY)
+    if (!hit) return
+    if (BLOCKS[hit.body] && worker.waiting().includes(hit.body)) worker.select(hit.body)
+    else if (worker.selected && Math.abs(hit.point[0] - PALLET.x) < PALLET.sx / 2 + 0.02 && Math.abs(hit.point[1] - PALLET.y) < PALLET.sy / 2 + 0.02) worker.choose([hit.point[0], hit.point[1]])
+  })
   if (new URLSearchParams(location.search).has('autostart')) startButton.click()
   const auto = new URLSearchParams(location.search).get('build')
   if (auto) { ask.value = auto; startBuild() }
@@ -435,9 +467,11 @@ async function main() {
     if (ARM_CELL) {
       // The UR10e: its controller always runs (building, holding still, or parked during the truck test).
       if (truck.running) truck.tick(simDt)
-      ring.visible = false
+      ring.visible = !!worker?.selected // a ring on the chosen box's top
+      if (worker?.selected) { const p = robot.P(worker.selected); ring.position.set(p[0], p[1], p[2] + BLOCKS[worker.selected].size[2] / 2 + 0.002); ring.material.color.set(0x3fb950) }
+      else ring.position.z = 0.002
       if (simDt > 0) robot.tick(simDt)
-      const text = truck.running ? '🚚 Truck test running…' : agentBusy ? 'The UR10e is building · press Stop to stop it' : `Ready · ${HELP}`
+      const text = worker ? worker.text : truck.running ? '🚚 Truck test running…' : agentBusy ? 'The UR10e is building · press Stop to stop it' : `Ready · ${HELP}`
       if (status.textContent !== text) status.textContent = text
     } else if (truck.running) {
       // 2c. Truck test: hand parked high and open, gravity tilted by the test, slow motion during the pushes.
