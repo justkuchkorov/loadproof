@@ -37,7 +37,7 @@ async function main() {
   const graspSite = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE.value, 'grasp_site')
   const offset = [0, 1, 2].map((k) => data.site_xpos[3 * graspSite + k] - data.mocap_pos[k])
   const move = Array.from(data.mocap_pos.subarray(0, 3))
-  const PARK = [0.06 - offset[0], 0.3 - offset[1], 0.3 - offset[2]] // hand parked up and to the left, clear of the camera's view
+  const PARK = [0.1 - offset[0], -0.32 - offset[1], 0.34 - offset[2]] // hand parked high above the conveyor, clear of the boxes and the pallet
   const reach = createReach()
   const grasp = createGrasp({ mujoco, model, data, objects: Object.keys(BLOCKS) })
   const robot = createRobot({ mujoco, model, data })
@@ -212,16 +212,16 @@ async function main() {
       for (let i = 0; i < model.nu; i++) data.ctrl[i] = 0
       ring.visible = false
       status.textContent = '🚚 Truck test running…'
-    } else if (parked && !hand) {
-      // After a truck test: stay parked, do not come down onto whatever fell.
-      for (let k = 0; k < 3; k++) { move[k] += 0.15 * (safe[k] - move[k]); data.mocap_pos[k] = move[k] }
-      for (let i = 0; i < model.nu; i++) data.ctrl[i] = 0
-      ring.visible = false
     } else if (agentBusy) {
-      // 2a. The agent is building: the robot's own skills drive the hand.
+      // 2a. The agent is building: the robot's own skills drive the hand. (Checked before "parked".)
       robot.tick(dt)
       ring.visible = false
       status.textContent = `The robot is building · press Stop to take over`
+    } else if (parked && !hand) {
+      // Parked (at the start, after a reset or a truck test): stay up and out of the way.
+      for (let k = 0; k < 3; k++) { move[k] += 0.15 * (safe[k] - move[k]); data.mocap_pos[k] = move[k] }
+      for (let i = 0; i < model.nu; i++) data.ctrl[i] = 0
+      ring.visible = false
     } else {
       parked = false
       // 2b. Shared control: you choose where and when, the robot does the precise part.

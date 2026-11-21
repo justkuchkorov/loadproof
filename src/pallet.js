@@ -25,15 +25,31 @@ export const mass = (b) => b.kg / SCALE ** 3
 // the next box to the pick spot, so nothing ever stands behind the box being picked (the forearm would hit it).
 export const CONVEYOR = { x: 0.12, y0: -0.45, y1: -0.19, pick: [0.12, -0.27] }
 export const FLOOR = -0.75
-export function waitingSpot(i) { return [-1.6 - i * 0.3, 0] } // behind the camera, out of view
+export const STAGING_Y = 0.2 // boxes wait on the left side of the table (y > 0.2), where the robot never works
+
+// Waiting spots on the table, in order: rows along x with 2 cm gaps, a new row when the table ends.
+export function stagingSpots(order = ORDER) {
+  const spots = {}
+  let x = 0.02
+  let rowY = STAGING_Y
+  let rowDepth = 0
+  for (const b of order) {
+    const [sx, sy] = size(b)
+    if (x + sx > 0.52) { rowY += rowDepth + 0.03; x = 0.02; rowDepth = 0 }
+    spots[b.id] = [x + sx / 2, rowY + sy / 2]
+    x += sx + 0.02
+    rowDepth = Math.max(rowDepth, sy)
+  }
+  return spots
+}
 
 const COLORS = { true: '0.80 0.62 0.42 1', false: '0.72 0.55 0.36 1' } // cardboard (fragile ones a little lighter)
 
 export function sceneXml(order = ORDER) {
   const boxes = order.map((b, i) => {
     const [sx, sy, sz] = size(b)
-    const [x, y] = waitingSpot(i)
-    return `    <body name="${b.id}" pos="${x.toFixed(3)} ${y.toFixed(3)} ${(FLOOR + sz / 2).toFixed(4)}"><freejoint/>` +
+    const [x, y] = stagingSpots(order)[b.id]
+    return `    <body name="${b.id}" pos="${x.toFixed(3)} ${y.toFixed(3)} ${(sz / 2).toFixed(4)}"><freejoint/>` +
       `<geom name="${b.id}" class="box" type="box" size="${sx / 2} ${sy / 2} ${sz / 2}" mass="${mass(b).toFixed(4)}" rgba="${COLORS[b.fragile]}"/></body>`
   }).join('\n')
   const grips = order.map((b) => `    <weld name="grip_${b.id}" body1="rh_palm" body2="${b.id}" active="false"/>`).join('\n')
@@ -50,7 +66,7 @@ export function sceneXml(order = ORDER) {
     <light pos="0 0 1.5"/>
     <light pos="0.3 0 1.5" dir="0 0 -1" directional="true"/>
     <geom name="floor" pos="0 0 -0.75" size="0 0 0.05" type="plane" rgba="0.2 0.3 0.4 1"/>
-    <geom name="table" type="box" size="0.35 0.45 0.02" pos="0.2 0 -0.02" rgba="0.42 0.45 0.48 1" friction="1 0.01 0.001"/>
+    <geom name="table" type="box" size="0.35 0.6 0.02" pos="0.2 0.05 -0.02" rgba="0.42 0.45 0.48 1" friction="1 0.01 0.001"/>
     <geom name="conveyor" type="box" size="0.05 ${(CONVEYOR.y1 - CONVEYOR.y0) / 2} 0.003" pos="${CONVEYOR.x} ${(CONVEYOR.y0 + CONVEYOR.y1) / 2} 0.003" rgba="0.15 0.16 0.18 1" friction="${FRICTION} 0.005 0.0005"/>
     <geom name="pallet" type="box" size="${PALLET.sx / 2} ${PALLET.sy / 2} ${PALLET.top / 2}" pos="${PALLET.x} ${PALLET.y} ${PALLET.top / 2}" rgba="0.76 0.6 0.38 1" friction="${FRICTION} 0.005 0.0005"/>
     <body name="hand_target" mocap="true" pos="-0.2 0 0.15" quat="1 0 1 0"/>
@@ -112,8 +128,8 @@ export function bring(mujoco, model, data, id, order = ORDER) {
   mujoco.mj_forward(model, data)
 }
 
-// Is this box still waiting (not yet on the table)?
+// Is this box still waiting (in the staging area on the left)?
 export function waiting(mujoco, model, data, id) {
   const body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, id)
-  return data.xpos[3 * body + 2] < -0.3
+  return data.xpos[3 * body + 1] > STAGING_Y - 0.01
 }
