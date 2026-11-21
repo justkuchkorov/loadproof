@@ -109,6 +109,7 @@ export function createTools({ mujoco, model, robot, log, preview, reset, place, 
       const plan = get(plan_id)
       const kg = plan.blocks.reduce((s, b) => s + BLOCKS[b.block].kg, 0) + PALLET_KG
       const r = strapsNeeded({ kg, H: heightOf(plan) * REAL, L: PALLET.sx * REAL, B: PALLET.sy * REAL })
+      state.straps = { plan_id, ...r, kg }
       log('ok', `🪢 Straps (EN 12195-1, top-over): ${r.straps} for ${kg} kg, ${r.assumptions.H} m tall — ` +
         r.rows.map((x) => `${x.dir} ${x.bySliding} by sliding`).join(', ') + ` (assumed: friction ${r.assumptions.mu}, straps of ${r.assumptions.ftKN * 100} daN)`)
       return { plan_id, straps: r.straps, load_kg: kg, by_direction: r.rows, assumptions: { ...r.assumptions, pallet_kg: PALLET_KG, note: 'friction 0.4 assumed for a dry wooden floor; an anti-slip mat raises it' } }
@@ -122,6 +123,11 @@ export function createTools({ mujoco, model, robot, log, preview, reset, place, 
       else measured = await build(plan, { robot, log, reset })
       if (doWrap) { wrap(); state.wrapped = true }
       state.built = true
+      // The record for the report: every test of this plan, wrap, straps.
+      const tests = state.tests.filter((t) => t.plan_id === plan_id)
+      const counted = tests.filter((t) => !!t.wrapped === doWrap) // the tests of the load as it leaves: wrapped or not
+      plan.checks = { pass: counted.length > 0 && counted.every((t) => t.pass) }
+      plan.agent = { tests, wrapped: doWrap, straps: state.straps?.plan_id === plan_id ? state.straps : null, instructions: state.instructions }
       state.builtPlan = plan
       return { plan_id, built: true, every_box_where_planned: !!measured, wrapped: doWrap }
     },
@@ -150,6 +156,7 @@ async function callAgent(model, contents) {
 export async function runLoadAgent({ instructions = '', memoryText = '', ...deps }) {
   const { log } = deps
   const { tools, state } = createTools(deps)
+  state.instructions = instructions
   const order = Object.values(BLOCKS).map((b) => b.name).join(', ')
   if (globalThis.NO_AI || !KEY) return fixedSteps(tools, state, deps, instructions)
   const contents = [{ role: 'user', parts: [{ text: `Order: ${order}.\nInstructions: ${instructions || 'none'}.${memoryText}\nPlan, test, secure and build this pallet.` }] }]
@@ -198,9 +205,10 @@ async function fixedSteps(tools, state, { log }, instructions) {
     if (t.pass && t2.pass) chosen = p.plan_id
     else skip.push(p.plan_id)
   }
-  if (chosen === null && skip.length) {
-    const t = await call('truck_test', { plan_id: skip[0], profile: hard ? 'hard_braking' : 'eu_test', wrapped: true })
-    if (t.pass) { chosen = skip[0]; wrapIt = true }
+  if (chosen === null && skip.length) { // wrapped, every test the trip needs
+    const t = await call('truck_test', { plan_id: skip[0], profile: 'eu_test', wrapped: true })
+    const t2 = t.pass && hard ? await call('truck_test', { plan_id: skip[0], profile: 'hard_braking', wrapped: true }) : t
+    if (t.pass && t2.pass) { chosen = skip[0]; wrapIt = true }
   }
   if (chosen === null) { log('fail', 'Nothing passed, even wrapped: split the order over two pallets.'); return state }
   await call('straps_needed', { plan_id: chosen })

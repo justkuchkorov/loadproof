@@ -27,7 +27,9 @@ const { model, createRobot } = await loadScene(mujoco, order)
 const data = new mujoco.MjData(model)
 parkArm(mujoco, model, data)
 mujoco.mj_forward(model, data)
-const robot = createRobot({ mujoco, model, data })
+const { createCamera } = await import('../src/camera.js')
+const eye = process.env.EYE === '0' ? null : createCamera({ mujoco, model, data }) // as in the browser: the robot sees with the depth camera
+const robot = createRobot({ mujoco, model, data, eye, debug: process.env.DEBUG ? (s) => console.log('         robot:', s) : undefined })
 
 let running = true, carry = 0
 ;(async () => { // the browser's frames: whole physics steps, the remainder carried
@@ -46,4 +48,11 @@ const wrap = () => { wrapBoxes(mujoco, model, data, Object.keys(BLOCKS)); log('o
 const state = await runLoadAgent({ instructions, mujoco, model, robot, log, preview: () => {}, reset, place: null, wrap })
 running = false
 console.log('state:', JSON.stringify({ plan: state.plan, built: state.built, wrapped: state.wrapped, tests: state.tests.length }))
+
+// REPORT=file.html: write the load stability report of the built plan
+if (process.env.REPORT && state.builtPlan) {
+  const { reportHtml } = await import('../src/report.js')
+  fs.writeFileSync(process.env.REPORT, reportHtml({ order: order ?? (await import('../src/pallet.js')).ORDER, plan: state.builtPlan, checks: state.builtPlan.checks, truck: null, orderName: 'test order' }))
+  console.log('report written to', process.env.REPORT)
+}
 process.exit(0)

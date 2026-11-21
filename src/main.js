@@ -6,6 +6,7 @@ import { createReach } from './reach.js'
 import { createGrasp, FIST } from './grasp.js'
 import { createRobot } from './robot.js'
 import { createArm, prepareArm } from './arm.js'
+import { createCamera } from './camera.js'
 import { checkPlan, repair } from './agent.js'
 import { runLoadAgent, readOrder, quickPlan } from './loadagent.js'
 import { BLOCKS, setOrder } from './planner.js'
@@ -56,7 +57,16 @@ async function main() {
   const PARK = [0.47 - offset[0], -0.5 - offset[1], 0.34 - offset[2]] // hand parked high in the far right corner, clear of both pallets
   const reach = createReach()
   const grasp = createGrasp({ mujoco, model, data, objects: Object.keys(BLOCKS) })
-  const robot = ARM_CELL ? createArm({ mujoco, model, data }) : createRobot({ mujoco, model, data })
+  // The cell's depth camera: the arm finds boxes with it; a small live view shows what it sees.
+  const eye = ARM_CELL ? createCamera({ mujoco, model, data }) : null
+  if (eye) {
+    const box = document.createElement('div')
+    box.id = 'eye'
+    box.innerHTML = '<div class="dim">📷 3D camera · what the robot sees</div>'
+    box.appendChild(eye.canvas)
+    document.body.appendChild(box)
+  }
+  const robot = ARM_CELL ? createArm({ mujoco, model, data, eye }) : createRobot({ mujoco, model, data })
   window.robot = robot
   let agentBusy = false
   let xy = [0.18, 0]
@@ -506,6 +516,7 @@ async function main() {
     } else sim.scene.position.set(0, 0, 0)
 
     sim.step(simDt)
+    eye?.tick(2) // the live camera view, two rows a frame
     sim.render()
     requestAnimationFrame(frame)
   }

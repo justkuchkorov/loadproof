@@ -41,7 +41,7 @@ export function createTruckTest({ mujoco, model, data, scene, log }) {
     if (groups.length === 0) { log('fail', 'Truck test: nothing on a pallet to test'); return false }
     for (const g of groups) g.height = Math.max(...g.names.map((n) => P(n)[2] + sizeOf(n)[2] / 2))
     run = { t: 0, step: -1, before: null, groups, accel }
-    log('step', `🚚 Truck test at ${accel} g: hand away, then ${PUSHES.map((p) => p.name).join(', then ')} (${groups.map((g) => `${g.name} ${(g.height * 100).toFixed(1)} cm tall`).join('; ')})`)
+    log('step', `🚚 Truck test at ${accel} g: robot parked, then ${PUSHES.map((p) => p.name).join(', then ')} (${groups.map((g) => `${g.name} ${(g.height * 100 * 5).toFixed(0)} cm tall`).join('; ')})`)
     return true
   }
 
@@ -73,8 +73,8 @@ export function createTruckTest({ mujoco, model, data, scene, log }) {
       const [worstName, worst] = moved.reduce((a, b) => (b[1] > a[1] ? b : a))
       const pass = worst < limit
       last.groups.push({ name: g.name, worst, worstName: nameOf(worstName), limit, pass })
-      log(pass ? 'ok' : 'fail', `${g.name}: truck test ${pass ? 'PASSED' : 'FAILED'} — the ${nameOf(worstName)} moved ${(worst * 1000).toFixed(0)} mm ` +
-        `(limit: 5% of ${(g.height * 100).toFixed(1)} cm = ${(limit * 1000).toFixed(0)} mm)`)
+      log(pass ? 'ok' : 'fail', `${g.name}: truck test ${pass ? 'PASSED' : 'FAILED'} — the ${nameOf(worstName)} moved ${(worst * 1000 * 5).toFixed(0)} mm ` +
+        `(limit: 5% of ${(g.height * 100 * 5).toFixed(0)} cm = ${(limit * 1000 * 5).toFixed(0)} mm)`)
     }
     run = null
     return false

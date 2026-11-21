@@ -8,7 +8,9 @@ const mujoco = await loadMujoco()
 const { model, createRobot } = await loadScene(mujoco)
 const data = new mujoco.MjData(model)
 parkArm(mujoco, model, data); mujoco.mj_forward(model, data)
-const robot = createRobot({ mujoco, model, data })
+const { createCamera } = await import('../src/camera.js')
+const eye = process.env.EYE ? createCamera({ mujoco, model, data }) : null // EYE=1: the robot finds the knocked box with the depth camera
+const robot = createRobot({ mujoco, model, data, eye, debug: process.env.DEBUG ? (s) => console.log('   robot:', s) : undefined })
 let running = true
 ;(async () => { while (running) { robot.tick(1 / 60); for (let i = 0; i < 8; i++) mujoco.mj_step(model, data); await new Promise((r) => setImmediate(r)) } })()
 const plan = JSON.parse(fs.readFileSync('tests/plans/ai_1.json', 'utf8'))

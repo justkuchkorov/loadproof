@@ -3,8 +3,9 @@
 import { design, toPositions, checkRules, checkPhysics, checkTransport, BLOCKS } from './planner.js'
 import { search } from './solver.js'
 
-const cm = (v) => (v * 100).toFixed(1)
-const mm = (v) => (v * 1000).toFixed(0)
+// Sizes in the log are real sizes: the model is 1:5.
+const cm = (v) => (v * 100 * 5).toFixed(0)
+const mm = (v) => (v * 1000 * 5).toFixed(0)
 
 // Run the three checks on a plan and log them. Returns { pass, feedback } — feedback is for the AI.
 // all: run every check even after a failure (to show the whole picture, e.g. for the rushed worker's stack).
@@ -166,7 +167,7 @@ export async function build(plan, { robot, log, reset, feed }) {
       const off = Math.hypot(p[0] - dest[0], p[1] - dest[1]) * 1000
       const cup = r.cupN !== undefined ? ` · vacuum held ${r.cupN} of ${robot.cupN} N` : ''
       if (off < 15 && Math.abs(p[2] - dest[2]) < 0.006) {
-        log('ok', `Measured the ${name}: ${off.toFixed(0)} mm off, right height${cup}${r.tries > 1 ? ` (grab worked on try ${r.tries})` : ''}`)
+        log('ok', `Measured the ${name}: ${(off * 5).toFixed(0)} mm off, right height${cup}${r.tries > 1 ? ` (grab worked on try ${r.tries})` : ''}`)
         break
       }
       log('fail', `Measured the ${name}: ${cm(p[2])} cm high, should be ${cm(dest[2])} cm — fixing it`)
@@ -193,7 +194,7 @@ export async function repair(plan, { robot, log }) {
   const order = buildOrder(plan.blocks)
   const off = order.filter((b) => !inPlace(b, robot))
   if (off.length === 0) { log('ok', 'Measured every box: all where the plan says'); return true }
-  const mmOff = (b) => (Math.hypot(...robot.P(b.block).map((v, k) => v - [b.x, b.y, b.z][k])) * 1000).toFixed(0)
+  const mmOff = (b) => (Math.hypot(...robot.P(b.block).map((v, k) => v - [b.x, b.y, b.z][k])) * 1000 * 5).toFixed(0)
   log('fail', `Measured every box: ${off.map((b) => `${BLOCKS[b.block].name} is ${mmOff(b)} mm off`).join(', ')}`)
   robot.start()
   for (const b of off) {

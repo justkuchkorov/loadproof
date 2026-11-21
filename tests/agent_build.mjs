@@ -34,7 +34,9 @@ const { model, createRobot } = await loadScene(mujoco, ORDER_ENV)
 const data = new mujoco.MjData(model)
 require_park: { const { parkArm } = await import("../src/pallet.js"); parkArm(mujoco, model, data) }
 mujoco.mj_forward(model, data)
-const robot = createRobot({ mujoco, model, data, debug: (s) => console.log('         robot:', s) })
+const { createCamera } = await import('../src/camera.js')
+const eye = process.env.EYE ? createCamera({ mujoco, model, data }) : null // EYE=1: the robot finds boxes with the depth camera
+const robot = createRobot({ mujoco, model, data, eye, debug: (s) => console.log('         robot:', s) })
 
 let running = true
 const DT = 1 / 60

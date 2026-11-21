@@ -3,7 +3,7 @@ import { BLOCKS } from './planner.js'
 import { PALLET } from './pallet.js'
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
-const mm = (m) => (m * 1000).toFixed(0)
+const mm = (m) => (m * 1000 * 5).toFixed(0) // model metres -> real millimetres (the model is 1:5)
 
 // Top view of one layer: the pallet's 2 x 2 spots, near row at the bottom, the robot's left on the left.
 function layerSvg(blocks) {
@@ -23,6 +23,7 @@ function layerSvg(blocks) {
 export function reportHtml({ order, plan, checks, truck, orderName }) {
   const layers = [...new Set(plan.blocks.map((b) => b.layer ?? Math.round(b.z * 100)))].sort((a, b) => a - b)
   const t = checks?.transport
+  const agent = plan.agent
   const verdict = checks?.pass && (!truck || truck.groups.every((g) => g.pass))
   const truckRows = truck ? truck.groups.map((g) => `<tr><td>${esc(g.name)}</td><td>${mm(g.worst)} mm (${esc(g.worstName)})</td><td>${mm(g.limit)} mm</td><td class="${g.pass ? 'ok' : 'bad'}">${g.pass ? 'PASS' : 'FAIL'}</td></tr>`).join('') : ''
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Load stability report</title>
@@ -46,12 +47,17 @@ ${order.map((b) => `<tr><td>${esc(b.label)}</td><td>${b.kg} kg</td><td>${b.cm.jo
 <h2>Checks before building</h2>
 <table>
 <tr><td>Warehouse rules (on the pallet, 70% support, nothing heavy on much lighter, nothing on fragile)</td><td class="ok">PASS</td></tr>
-<tr><td>Stands on its own (2 s of physics, no box moves 5 mm)</td><td class="ok">PASS</td></tr>
-${t ? t.results.map((r) => `<tr><td>Truck test 0.5 g, pushed ${esc(r.name)}: worst ${mm(r.worst)} mm (limit ${mm(t.limit)} mm = 5% of ${(t.height * 100).toFixed(1)} cm)</td><td class="${r.pass ? 'ok' : 'bad'}">${r.pass ? 'PASS' : 'FAIL'}</td></tr>`).join('') : ''}
+<tr><td>Stands on its own (2 s of physics, no box moves 25 mm)</td><td class="ok">PASS</td></tr>
+${t ? t.results.map((r) => `<tr><td>Truck test 0.5 g, pushed ${esc(r.name)}: worst ${mm(r.worst)} mm (limit ${mm(t.limit)} mm = 5% of ${(t.height * 100 * 5).toFixed(0)} cm)</td><td class="${r.pass ? 'ok' : 'bad'}">${r.pass ? 'PASS' : 'FAIL'}</td></tr>`).join('') : ''}
+${agent ? agent.tests.map((x) => `<tr><td>Truck test, ${esc(x.profile)}${x.wrapped ? ', wrapped' : agent.wrapped ? ' (before wrapping)' : ''}: ${x.pushes.map((p) => `${esc(p.push)} ${p.fell_off_pallet ? 'fell off' : p.moved_mm + ' mm'}`).join(', ')} (limit ${x.limit_mm} mm = 5% of the load height)</td><td class="${x.pass ? 'ok' : !x.wrapped && agent.wrapped ? 'dim' : 'bad'}">${x.pass ? 'PASS' : 'FAIL'}</td></tr>`).join('') : ''}
 </table>
+${agent ? `<h2>Securing</h2><table>
+<tr><td>Stretch wrap</td><td>${agent.wrapped ? 'yes (the agent decided)' : 'no'}</td></tr>
+${agent.straps ? `<tr><td>Top-over straps (EN 12195-1, for ${agent.straps.kg} kg incl. a 10 kg pallet, ${agent.straps.assumptions.H} m tall; friction ${agent.straps.assumptions.mu} assumed, straps of ${agent.straps.assumptions.ftKN * 100} daN)</td><td><b>${agent.straps.straps}</b></td></tr>` : ''}
+${agent.instructions ? `<tr><td>Instructions the agent followed</td><td>${esc(agent.instructions)}</td></tr>` : ''}</table>` : ''}
 ${truck ? `<h2>Truck test on the built pallet (${truck.accel} g, swerve then brake)</h2><table><tr><th>Pallet</th><th>Largest movement</th><th>Limit</th><th></th></tr>${truckRows}</table>` : ''}
 <p class="dim" style="margin-top:22px">Method: the 0.5 g load test follows the idea of EUMOS 40509 (a constant push of 0.5 g, permanent shift at most 5% of the load height),
-run in the MuJoCo physics engine on a 1:5 scale model with box friction 0.6 (anti-slip sheets). This is a planning check, not a certification.</p>
+run in the MuJoCo physics engine on a 1:5 scale model with box friction 0.6 (anti-slip sheets); hard braking uses the road values of EN 12195-1 (0.8 g forward, 0.5 g sideways). Sizes are real sizes. This is a planning check, not a certification.</p>
 <button onclick="print()">Print / save as PDF</button>
 </body></html>`
   return html
