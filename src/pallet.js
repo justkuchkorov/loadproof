@@ -3,7 +3,16 @@
 
 export const SCALE = 5
 export const PALLET = { x: 0.26, y: 0, sx: 0.12, sy: 0.16, top: 0.029 } // centre and size in metres; top surface height
-export const PALLET_B = { ...PALLET, y: -0.27 } // the comparison pallet, on the right
+export const PALLET_B = { ...PALLET, y: -0.4 } // the comparison pallet, on the right (clear of the robot's reach)
+// The robot cell: a UR10e on a pedestal behind the pallet (base centre and height), and where its pad waits.
+export const ARM = { base: [0.40, 0, 0.2], park: [0.5, 0.08, 0.3] } // pedestal 1 m tall in real size
+// The raised infeed table round the robot (a U, the pallet in its notch), where the boxes of the order wait:
+// at waist height (50 cm real), like a conveyor's end. [x0, x1, y0, y1], top height INFEED_Z.
+export const INFEED_Z = 0.1
+export const INFEED = [[0.17, 0.64, 0.115, 0.3], [0.17, 0.64, -0.3, -0.115], [0.44, 0.64, -0.115, 0.115]]
+// 'arm' (the UR10e cell, default) or 'hand' (the first version: a floating robot hand, kept for the camera demo)
+export let CELL = 'arm'
+export const setCell = (c) => { CELL = c }
 export const FRICTION = 0.6 // cardboard with anti-slip sheets: slip angle 30-45 degrees -> tan 30 = 0.58 (Smurfit Kappa)
 
 // One example order. kg and cm are the REAL box (the model is 1:5).
@@ -88,6 +97,7 @@ export const STAGING_Y = 0.2
 // Waiting spots on the table, in order: rows along x with 8 cm gaps (7 cm between rows), a new row when the table ends.
 // The open fingers reach about 8 cm forward and the thumb about 9 cm to the left, so neighbours stay clear.
 export function stagingSpots(order = ORDER) {
+  if (CELL === 'arm') return armStaging(order)
   const spots = {}
   let x = -0.1
   let rowY = STAGING_Y
@@ -102,13 +112,44 @@ export function stagingSpots(order = ORDER) {
   return spots
 }
 
+// Arm cell: the boxes wait in a ring around the robot, inside its reach (pad centre at most 22 cm from the base),
+// clear of the pallets and the pedestal, 2 cm apart (a suction pad needs no room for fingers).
+// Filled from the front-left, round the back, to the right.
+function armStaging(order) {
+  const [bx, by] = ARM.base
+  const R = 0.23
+  const rects = [] // [x0, x1, y0, y1], keep-out areas first
+  const grow = (pal, m) => [pal.x - pal.sx / 2 - m, pal.x + pal.sx / 2 + m, pal.y - pal.sy / 2 - m, pal.y + pal.sy / 2 + m]
+  rects.push(grow(PALLET, 0.035), grow(PALLET_B, 0.02), [bx - 0.05, bx + 0.05, by - 0.05, by + 0.05])
+  const free = (r) => rects.every((o) => r[1] + 0.015 <= o[0] || r[0] >= o[1] + 0.015 || r[3] + 0.015 <= o[2] || r[2] >= o[3] + 0.015)
+  const cands = []
+  for (let x = 0.15; x <= 0.64; x += 0.01) for (let y = -0.3; y <= 0.3; y += 0.01) {
+    const r = Math.hypot(x - bx, y - by)
+    if (r < 0.1 || r > R) continue
+    let ang = Math.atan2(y - by, x - bx) // front-left is about +2.4, behind 0, front-right about -2.4
+    cands.push({ x, y, key: -ang * 100 - r }) // by angle (left first, round the back), outer ring first
+  }
+  cands.sort((a, b) => a.key - b.key)
+  const spots = {}
+  for (const b of order) {
+    const [sx, sy] = size(b)
+    // No room inside the reach: the box waits further out, and the robot reports that it cannot pick it.
+    const onInfeed = (r) => INFEED.some((w) => r[0] >= w[0] && r[1] <= w[1] && r[2] >= w[2] && r[3] <= w[3])
+    const c = cands.find(({ x, y }) => { const r = [x - sx / 2, x + sx / 2, y - sy / 2, y + sy / 2]; return onInfeed(r) && free(r) }) ?? { x: 0.62, y: 0.3 - 0.06 * Object.keys(spots).length }
+    spots[b.id] = [c.x, c.y]
+    rects.push([c.x - sx / 2, c.x + sx / 2, c.y - sy / 2, c.y + sy / 2])
+  }
+  return spots
+}
+
 const COLORS = { true: '0.80 0.62 0.42 1', false: '0.72 0.55 0.36 1' } // cardboard (fragile ones a little lighter)
 
 export function sceneXml(order = ORDER) {
   const boxes = order.map((b, i) => {
     const [sx, sy, sz] = size(b)
     const [x, y] = stagingSpots(order)[b.id]
-    return `    <body name="${b.id}" pos="${x.toFixed(3)} ${y.toFixed(3)} ${(sz / 2).toFixed(4)}"><freejoint/>` +
+    const z0 = CELL === 'arm' ? INFEED_Z : 0 // waiting on the infeed table
+    return `    <body name="${b.id}" pos="${x.toFixed(3)} ${y.toFixed(3)} ${(z0 + sz / 2).toFixed(4)}"><freejoint/>` +
       `<geom name="${b.id}" class="box" type="box" size="${sx / 2} ${sy / 2} ${sz / 2}" mass="${mass(b).toFixed(4)}" rgba="${COLORS[b.fragile]}"/></body>`
   }).join('\n')
   // Copies (c1..cn) for the comparison pallet; they wait under the floor until "Compare" places them.
@@ -118,12 +159,13 @@ export function sceneXml(order = ORDER) {
     return `    <body name="${id}" pos="${(-1.6 - i * 0.3).toFixed(3)} 0 ${(-0.75 + sz / 2).toFixed(4)}"><freejoint/>` +
       `<geom name="${id}" class="box" type="box" size="${sx / 2} ${sy / 2} ${sz / 2}" mass="${mass(b).toFixed(4)}" rgba="${COLORS[b.fragile]}"/></body>`
   }).join('\n')
-  const grips = order.map((b) => `    <weld name="grip_${b.id}" body1="rh_palm" body2="${b.id}" active="false"/>`).join('\n')
+  const arm = CELL === 'arm'
+  const grips = order.map((b) => `    <weld name="grip_${b.id}" body1="${arm ? 'suction' : 'rh_palm'}" body2="${b.id}" active="false"/>`).join('\n')
   // Stretch wrap: each box held to where it stands by a soft, springy link (off until the load is wrapped).
   const wraps = order.flatMap((b) => [b.id, copyId(b.id)]).map((id) => `    <weld name="wrap_${id}" body1="${id}" active="false" solref="0.06 1"/>`).join('\n')
   return `<mujoco model="LoadProof pallet scene">
-  <include file="hand_free.xml"/>
-  <option gravity="0 0 -9.81"/>
+  <include file="${arm ? 'ur10e.xml' : 'hand_free.xml'}"/>
+  <option gravity="0 0 -9.81"${arm ? ' cone="elliptic" impratio="10"' : ''}/>
   <statistic extent="0.5"/>
   <default>
     <default class="box">
@@ -134,23 +176,40 @@ export function sceneXml(order = ORDER) {
     <light pos="0 0 1.5"/>
     <light pos="0.3 0 1.5" dir="0 0 -1" directional="true"/>
     <geom name="floor" pos="0 0 -0.75" size="0 0 0.05" type="plane" rgba="0.2 0.3 0.4 1"/>
-    <geom name="table" type="box" size="0.35 0.68 0.02" pos="0.2 0.1 -0.02" rgba="0.42 0.45 0.48 1" friction="1 0.01 0.001"/>
+    <geom name="table" type="box" size="${arm ? '0.43 0.68 0.02' : '0.35 0.68 0.02'}" pos="${arm ? '0.28 0.1 -0.02' : '0.2 0.1 -0.02'}" rgba="0.42 0.45 0.48 1" friction="1 0.01 0.001"/>
     <geom name="pallet" type="box" size="${PALLET.sx / 2} ${PALLET.sy / 2} ${PALLET.top / 2}" pos="${PALLET.x} ${PALLET.y} ${PALLET.top / 2}" rgba="0.76 0.6 0.38 1" friction="${FRICTION} 0.005 0.0005"/>
     <geom name="pallet_b" type="box" size="${PALLET.sx / 2} ${PALLET.sy / 2} ${PALLET.top / 2}" pos="${PALLET_B.x} ${PALLET_B.y} ${PALLET.top / 2}" rgba="0.76 0.6 0.38 1" friction="${FRICTION} 0.005 0.0005"/>
-    <body name="hand_target" mocap="true" pos="-0.2 0 0.15" quat="1 0 1 0"/>
+${arm ? `    <geom name="pedestal" type="cylinder" size="0.03 ${ARM.base[2] / 2}" pos="${ARM.base[0]} ${ARM.base[1]} ${ARM.base[2] / 2}" rgba="0.25 0.27 0.3 1"/>
+` +
+    INFEED.map((w, i) => `    <geom name="infeed${i}" type="box" size="${(w[1] - w[0]) / 2} ${(w[3] - w[2]) / 2} ${INFEED_Z / 2}" pos="${(w[0] + w[1]) / 2} ${(w[2] + w[3]) / 2} ${INFEED_Z / 2}" rgba="0.33 0.36 0.4 1" friction="1 0.01 0.001"/>`).join('\n')
+    : '    <body name="hand_target" mocap="true" pos="-0.2 0 0.15" quat="1 0 1 0"/>'}
 ${boxes}
 ${copies}
   </worldbody>
   <equality>
-    <weld body1="hand_target" body2="rh_forearm" solref="0.02 1"/>
-${grips}
+${arm ? '' : '    <weld body1="hand_target" body2="rh_forearm" solref="0.02 1"/>\n'}${grips}
 ${wraps}
   </equality>
 </mujoco>
 `
 }
 
-export const copyId = (id) => 'c' + id.slice(1)
+// Put the arm in its parked pose in a fresh or reset world d (its motors then hold it there by themselves).
+export function parkArm(mujoco, model, d) {
+  if (CELL !== 'arm' || !ARM.parkQ) return
+  const names = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
+  names.forEach((n, i) => {
+    const j = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT.value, n)
+    d.qpos[model.jnt_qposadr[j]] = ARM.parkQ[i]
+    d.qvel[model.jnt_dofadr[j]] = 0
+  })
+  d.ctrl.fill(0)
+}
+
+// The UR10e model file with its base put on the pedestal.
+export const armXml = (text) => text.replace('<body name="base" gravcomp="1" pos="0 0 0"', `<body name="base" gravcomp="1" pos="${ARM.base.join(' ')}"`)
+
+export const copyId =(id) => 'c' + id.slice(1)
 
 // The stack a rushed worker makes: boxes in arrival order, four corner columns, each box on whatever is already
 // in its corner(s). A wide box takes both corners of its row, a long box both corners of its column.
@@ -192,7 +251,9 @@ export const SPOTS = {
 // Is this box still waiting (in the staging area on the left)?
 export function waiting(mujoco, model, data, id) {
   const body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, id)
-  return data.xpos[3 * body + 1] > STAGING_Y - 0.01
+  const p = [0, 1, 2].map((k) => data.xpos[3 * body + k])
+  if (CELL === 'arm') return Math.abs(p[0] - PALLET.x) > PALLET.sx / 2 || Math.abs(p[1] - PALLET.y) > PALLET.sy / 2 // not on the pallet
+  return p[1] > STAGING_Y - 0.01
 }
 
 // Wrap: hold each named box to its CURRENT pose (soft weld to the world, like film holding the load).

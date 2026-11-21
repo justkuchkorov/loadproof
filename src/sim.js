@@ -3,7 +3,9 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import loadMujoco from '@mujoco/mujoco'
 
-const SCENE = 'shadow_hand/scene_generated.xml'
+const ARM_FILES = ['cell/ur10e.xml', ...['base_0', 'base_1', 'forearm_0', 'forearm_1', 'forearm_2', 'forearm_3', 'shoulder_0', 'shoulder_1',
+  'shoulder_2', 'upperarm_0', 'upperarm_1', 'upperarm_2', 'upperarm_3', 'wrist1_0', 'wrist1_1', 'wrist1_2', 'wrist2_0', 'wrist2_1',
+  'wrist2_2', 'wrist3'].map((n) => `cell/assets/${n}.obj`)]
 const HAND_FILES = [
   'shadow_hand/hand_free.xml',
   ...['f_distal_pst', 'f_knuckle', 'f_middle', 'f_proximal', 'forearm_0', 'forearm_1',
@@ -13,23 +15,28 @@ const HAND_FILES = [
 
 const COLLISION_GROUP = 3
 
-export async function createSim(container, { xml, labels = {} } = {}) {
+// arm: the UR10e cell (armXml puts its base on the pedestal; prepare runs once on the loaded model).
+export async function createSim(container, { xml, labels = {}, arm = false, armXml = (t) => t, prepare = () => {} } = {}) {
+  const SCENE = arm ? 'cell/scene_generated.xml' : 'shadow_hand/scene_generated.xml'
+  const FILES = arm ? ARM_FILES : HAND_FILES
   const mujoco = await loadMujoco()
 
   // Copy the model files into MuJoCo's in-memory file system.
   mujoco.FS.mkdir('/working')
-  for (const file of HAND_FILES) {
+  for (const file of FILES) {
     const parts = file.split('/')
     for (let i = 1; i < parts.length; i++) {
       const dir = '/working/' + parts.slice(0, i).join('/')
       if (!mujoco.FS.analyzePath(dir).exists) mujoco.FS.mkdir(dir)
     }
     const bytes = new Uint8Array(await (await fetch(`/models/${file}`)).arrayBuffer())
-    mujoco.FS.writeFile(`/working/${file}`, bytes)
+    if (file === 'cell/ur10e.xml') mujoco.FS.writeFile(`/working/${file}`, armXml(new TextDecoder().decode(bytes)))
+    else mujoco.FS.writeFile(`/working/${file}`, bytes)
   }
 
   mujoco.FS.writeFile(`/working/${SCENE}`, xml)
   const model = mujoco.MjModel.from_xml_path(`/working/${SCENE}`)
+  prepare(mujoco, model)
   const data = new mujoco.MjData(model)
   mujoco.mj_forward(model, data)
 
@@ -43,9 +50,10 @@ export async function createSim(container, { xml, labels = {} } = {}) {
 
   const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.01, 50)
   camera.up.set(0, 0, 1)
-  camera.position.set(-0.22, 0, 0.72) // high behind the table: screen up = forward, screen right = robot right
+  // high in front of the cell, looking at the pallet with the robot behind it
+  if (arm) camera.position.set(-0.42, -0.36, 0.78); else camera.position.set(-0.22, 0, 0.72)
   const controls = new OrbitControls(camera, renderer.domElement)
-  controls.target.set(0.2, 0, 0)
+  if (arm) controls.target.set(0.34, -0.08, 0.06); else controls.target.set(0.2, 0, 0)
   controls.update()
 
   scene.add(new THREE.AmbientLight(0xffffff, 0.6))

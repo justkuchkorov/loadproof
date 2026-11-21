@@ -1,6 +1,19 @@
 // Node test: the real agent (Gemini design -> rule check -> physics check -> build -> measure -> fix)
+globalThis.SELF_TOUCH = !!process.env.SELF
+globalThis.contactsOf = (mujoco, model, data, bodyName) => {
+  const O = mujoco.mjtObj
+  const name = (g) => mujoco.mj_id2name(model, O.mjOBJ_GEOM.value, g) || mujoco.mj_id2name(model, O.mjOBJ_BODY.value, model.geom_bodyid[g]) + '#' + g
+  const out = []
+  for (let i = 0; i < data.ncon; i++) {
+    const c = data.contact.get(i)
+    const a = name(c.geom1), b = name(c.geom2), dist = c.dist
+    c.delete()
+    if (a.includes(bodyName) || b.includes(bodyName)) out.push(`${a}/${b}(${(dist * 1000).toFixed(1)}mm)`)
+  }
+  return out.join(' ')
+}
 // on the real build scene, with physics stepped in a loop instead of the browser's frames.
-// Run: node tests/agent_build.mjs "Build a bridge"
+// Run: node tests/agent_build.mjs "Build a bridge"   (HAND=1: the first version with the floating hand)
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -8,20 +21,17 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 if (process.env.UP === '0') globalThis.FINGERS_UP = false
 globalThis.GEMINI_KEY = fs.readFileSync(path.join(root, '.env.local'), 'utf8').match(/^VITE_GEMINI_API_KEY=(.*)$/m)[1].trim()
 const { default: loadMujoco } = await import('../node_modules/@mujoco/mujoco/mujoco.js')
-const { createRobot } = await import('../src/robot.js')
 const { runAgent, build } = await import('../src/agent.js')
+const { loadScene } = await import('./cell.mjs')
 
 const mujoco = await loadMujoco()
-const models = path.join(root, 'public/models/')
-mujoco.FS.mkdir('/w'); mujoco.FS.mkdir('/w/shadow_hand'); mujoco.FS.mkdir('/w/shadow_hand/assets')
-const { sceneXml, orderFrom } = await import('../src/pallet.js')
+const { orderFrom } = await import('../src/pallet.js')
 const { setOrder } = await import('../src/planner.js')
 const ORDER_ENV = process.env.ORDER ? orderFrom(process.env.ORDER.split(',')) : undefined // a custom order, e.g. ORDER=WATER,WATER,CHIPS
 if (ORDER_ENV) setOrder(ORDER_ENV)
-mujoco.FS.writeFile('/w/shadow_hand/scene_build.xml', sceneXml(ORDER_ENV))
-for (const f of ['shadow_hand/hand_free.xml', ...fs.readdirSync(models + 'shadow_hand/assets').map((n) => 'shadow_hand/assets/' + n)]) mujoco.FS.writeFile('/w/' + f, fs.readFileSync(models + f))
-const model = mujoco.MjModel.from_xml_path('/w/shadow_hand/scene_build.xml')
+const { model, createRobot } = await loadScene(mujoco, ORDER_ENV)
 const data = new mujoco.MjData(model)
+require_park: { const { parkArm } = await import("../src/pallet.js"); parkArm(mujoco, model, data) }
 mujoco.mj_forward(model, data)
 const robot = createRobot({ mujoco, model, data, debug: (s) => console.log('         robot:', s) })
 
@@ -31,12 +41,15 @@ const DT = 1 / 60
   while (running) {
     const dt = process.env.JITTER ? (1 / 120 + Math.random() * (1 / 30 - 1 / 120)) : DT // uneven frames, like a busy browser
     robot.tick(dt)
+    if (process.env.TRACE && (globalThis.tt = (globalThis.tt ?? 0) + 1) % 10 === 0 && (robot.phase.holding === process.env.TRACE || globalThis.tracing)) { globalThis.tracing = robot.phase.holding === process.env.TRACE || (globalThis.tracing && globalThis.tt % 600 !== 0); const b = robot.P(process.env.TRACE); console.log("         TRACE goal", robot.phase.goal, "pad", robot.S().map((v) => v.toFixed(3)).join(","), "box", b.map((v) => v.toFixed(3)).join(","), "ik", robot.phase.ikErr, "touch", robot.touching(), "| qerr", robot.phase.q.split(" ").map((v, i) => (Number(v) - data.qpos[i]).toFixed(2)).join(" "), "| force", Array.from(data.actuator_force.slice(0, 6)).map((v) => v.toFixed(3)).join(" "), "| b4 contacts", contactsOf(mujoco, model, data, process.env.TRACE)) }
+    if (process.env.WATCH) { const w = process.env.WATCH, p = robot.P(w); const prev = globalThis.wp; if (prev && robot.phase.holding !== w && Math.hypot(p[0] - prev[0], p[1] - prev[1], p[2] - prev[2]) > 0.0015) console.log("         MOVED", w, prev.map((v) => v.toFixed(3)).join(","), "->", p.map((v) => v.toFixed(3)).join(","), "| goal", robot.phase.goal, "holding", robot.phase.holding, "ik", robot.phase.ikErr, robot.phase.q, "| pad", robot.S().map((v) => v.toFixed(3)).join(","), "| touch", robot.touching()); globalThis.wp = p }
+    if (process.env.TOUCH && (globalThis.nt = (globalThis.nt ?? 0) + 1) % 12 === 0) { const tc = robot.touching(); if (tc && tc !== globalThis.lastTouch) console.log("         touch:", tc, "| goal", robot.phase.goal, "holding", robot.phase.holding); globalThis.lastTouch = tc }
     for (let i = 0; i < Math.round(dt / model.opt.timestep); i++) mujoco.mj_step(model, data)
     await new Promise((r) => setImmediate(r))
   }
 })()
 const feed = undefined // no conveyor: the robot picks from the waiting group itself
-const reset = () => { robot.stop(); const m = Array.from(data.mocap_pos.subarray(0, 3)); mujoco.mj_resetData(model, data); data.mocap_pos.set(m); mujoco.mj_forward(model, data) }
+const reset = () => { robot.stop(); const m = Array.from(data.mocap_pos.subarray(0, 3)); mujoco.mj_resetData(model, data); data.mocap_pos.set(m); robot.resetPose?.(); mujoco.mj_forward(model, data) }
 const t0 = Date.now()
 if (process.argv[2] === '--plan-file') {
   const plan = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'))

@@ -42,7 +42,8 @@ export async function runAgent({ request, mujoco, model, robot, log, preview, re
   let plan = null
   let raw = null
   let feedback = null
-  for (let attempt = 0; attempt < 3; attempt++) {
+  if (globalThis.NO_AI) log('info', 'Offline mode (?noai): no AI, the search plans the pallet')
+  for (let attempt = 0; attempt < (globalThis.NO_AI ? 0 : 3); attempt++) {
     log('step', attempt === 0 ? 'Asking the AI to plan the pallet…' : `Asking the AI to fix the plan (try ${attempt + 1} of 3)…`)
     const t0 = performance.now()
     let r
@@ -67,7 +68,7 @@ export async function runAgent({ request, mujoco, model, robot, log, preview, re
     preview(null)
     return plan
   }
-  log('fail', 'The AI found no plan that passes every check in 3 tries.')
+  if (!globalThis.NO_AI) log('fail', 'The AI found no plan that passes every check in 3 tries.')
 
   // Second opinion, no AI: search every arrangement of layers and spots.
   log('step', 'Second opinion: searching every arrangement (no AI)…')
@@ -78,9 +79,17 @@ export async function runAgent({ request, mujoco, model, robot, log, preview, re
     for (const b of raw.boxes) (byLayer[b.layer] ??= []).push(BLOCKS[b.block].size[2])
     return Object.values(byLayer).reduce((s, hs) => s + (Math.max(...hs) - Math.min(...hs)), 0) + 0.001 * Object.keys(byLayer).length
   }
-  found.sort((x, y) => unevenness(x) - unevenness(y))
+  // Heavy boxes low first (the weight-weighted average layer, measured: the first arrangement that passes the truck
+  // test moved from try 28 to try 4 on the demo order), even layers next.
+  const heavyLow = (raw) => raw.boxes.reduce((s, b) => s + BLOCKS[b.block].kg * b.layer, 0) / raw.boxes.reduce((s, b) => s + BLOCKS[b.block].kg, 0)
+  found.sort((x, y) => (heavyLow(x) - heavyLow(y)) || (unevenness(x) - unevenness(y)))
+  let checked = 0
   for (const raw of found) {
+    // one arrangement at a time, letting the page draw in between (the physics checks take a moment each)
+    await new Promise((r) => setTimeout(r, 0))
+    if (++checked % 10 === 0) log('info', `Checked ${checked} of ${found.length} arrangements in the physics simulation…`)
     const { plan: p } = toPositions(raw)
+    preview(p, 'checking')
     if (!checkPhysics(mujoco, model, p).stands || !checkTransport(mujoco, model, p, 0.5).pass) continue
     log('ok', `The search found a stacking that passes the rules, stands and passes the truck test (${found.length} of ${tried} arrangements pass the rules). Using it.`)
     p.name = 'found by search'; p.say = 'A stacking found by searching every arrangement; it passed every check.'
@@ -136,6 +145,9 @@ export async function build(plan, { robot, log, reset, feed }) {
   // a row the RIGHT box first (the thumb sticks out to the left): the hand always reaches into empty space.
   plan = { ...plan, blocks: buildOrder(plan.blocks) }
   log('step', 'Only now the robot builds it')
+  // Honest about the robot: boxes heavier than its payload are flagged (the simulation still lifts them).
+  const heavy = robot.payloadKg ? plan.blocks.filter((b) => BLOCKS[b.block].kg > robot.payloadKg).map((b) => BLOCKS[b.block].name) : []
+  if (heavy.length) log('info', `⚠ Over the UR10e's ${robot.payloadKg} kg payload (UR datasheet): ${heavy.join(', ')}. A real cell needs a bigger arm (UR20: 20 kg) or a person for these.`)
   reset()
   robot.start()
   const placed = []

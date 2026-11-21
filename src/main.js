@@ -5,9 +5,10 @@ import { retarget } from './retarget.js'
 import { createReach } from './reach.js'
 import { createGrasp, FIST } from './grasp.js'
 import { createRobot } from './robot.js'
+import { createArm, prepareArm } from './arm.js'
 import { runAgent, checkPlan, repair } from './agent.js'
 import { BLOCKS, setOrder } from './planner.js'
-import { ORDER, CATALOG, PALLET, PALLET_B, sceneXml, workersStack, orderFrom, randomOrder, copyId, wrapBoxes } from './pallet.js'
+import { ORDER, CATALOG, PALLET, PALLET_B, sceneXml, workersStack, orderFrom, randomOrder, copyId, wrapBoxes, setCell, armXml } from './pallet.js'
 import { createTruckTest } from './truck.js'
 import * as memory from './memory.js'
 import POOL from './pool.js'
@@ -20,6 +21,11 @@ const SMOOTH_MOVE = 0.3 // hand position
 const HELP = 'R = reset'
 const PREVIEW_COLOR = { checking: 0x8b949e, bad: 0xf85149, good: 0x3fb950 }
 
+// The UR10e cell by default; ?hand opens the first version (a floating robot hand you can steer with the camera).
+const ARM_CELL = !new URLSearchParams(location.search).has('hand')
+setCell(ARM_CELL ? 'arm' : 'hand')
+globalThis.NO_AI = new URLSearchParams(location.search).has('noai') // offline: plan by search only
+
 async function main() {
   // The order: from the address (#order=WATER,CHIPS,...) or the demo order #A-1042.
   const fromHash = new URLSearchParams(location.hash.slice(1)).get('order')
@@ -28,7 +34,7 @@ async function main() {
   const order = demo ? ORDER : orderFrom(labelsInHash)
   setOrder(order)
   const labels = Object.fromEntries(order.flatMap((b) => [[b.id, { title: b.label, kg: b.kg, fragile: b.fragile }], [copyId(b.id), { title: b.label, kg: b.kg, fragile: b.fragile }]]))
-  const sim = await createSim(document.getElementById('view'), { xml: sceneXml(order), labels })
+  const sim = await createSim(document.getElementById('view'), { xml: sceneXml(order), labels, arm: ARM_CELL, armXml, prepare: prepareArm })
   const { mujoco, model, data } = sim
   window.sim = sim
 
@@ -44,12 +50,13 @@ async function main() {
 
   // The hand follows an invisible "mocap" target. Keep the grasp point (in the palm) where it is told to go.
   const graspSite = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE.value, 'grasp_site')
-  const offset = [0, 1, 2].map((k) => data.site_xpos[3 * graspSite + k] - data.mocap_pos[k])
+  const offset = [0, 1, 2].map((k) => ARM_CELL ? 0 : data.site_xpos[3 * graspSite + k] - data.mocap_pos[k])
   const move = Array.from(data.mocap_pos.subarray(0, 3))
   const PARK = [0.47 - offset[0], -0.5 - offset[1], 0.34 - offset[2]] // hand parked high in the far right corner, clear of both pallets
   const reach = createReach()
   const grasp = createGrasp({ mujoco, model, data, objects: Object.keys(BLOCKS) })
-  const robot = createRobot({ mujoco, model, data })
+  const robot = ARM_CELL ? createArm({ mujoco, model, data }) : createRobot({ mujoco, model, data })
+  window.robot = robot
   let agentBusy = false
   let xy = [0.18, 0]
   let lastHand = null
@@ -59,8 +66,11 @@ async function main() {
     truck?.cancel()
     robot.stop()
     mujoco.mj_resetData(model, data)
+    if (ARM_CELL) robot.resetPose() // the arm stands parked, its motors holding it there
+    else {
     const fa = model.jnt_qposadr[model.body_jntadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, 'rh_forearm')]]
     for (let k = 0; k < 3; k++) { move[k] = PARK[k]; data.mocap_pos[k] = PARK[k]; data.qpos[fa + k] = PARK[k] }
+    }
     parked = true
     mujoco.mj_forward(model, data)
     if (typeof signs !== 'undefined') signs.forEach((s) => { s.visible = false })
@@ -349,7 +359,8 @@ async function main() {
 
   let tracker = null
   reset() // start with the hand parked
-  status.textContent = `Type what to build, or press "Start camera" and use your right hand. ${HELP}`
+  status.textContent = ARM_CELL ? `Press 🤖 to plan and build. ${HELP}` : `Type what to build, or press "Start camera" and use your right hand. ${HELP}`
+  if (ARM_CELL) startButton.style.display = 'none' // the camera steers the hand version (?hand)
 
   startButton.onclick = async () => {
     startButton.disabled = true
@@ -395,7 +406,13 @@ async function main() {
     }
 
     let simDt = dt
-    if (truck.running) {
+    if (ARM_CELL) {
+      // The UR10e: its controller always runs (building, holding still, or parked during the truck test).
+      if (truck.running) { simDt = dt * truck.timeScale; truck.tick(simDt) }
+      robot.tick(simDt)
+      ring.visible = false
+      status.textContent = truck.running ? '🚚 Truck test running…' : agentBusy ? 'The UR10e is building · press Stop to stop it' : `Ready · ${HELP}`
+    } else if (truck.running) {
       // 2c. Truck test: hand parked high and open, gravity tilted by the test, slow motion during the pushes.
       simDt = dt * truck.timeScale
       truck.tick(simDt)

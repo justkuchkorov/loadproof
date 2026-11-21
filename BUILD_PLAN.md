@@ -69,3 +69,16 @@ pitch/slides.html (4 slides, arrow keys, f = full screen).
 **Known limits (say them before a judge does):** 1:5 simulation; assisted grip (a lock, like a suction gripper); the
 forearm stub does not collide (an arm from above is assumed); wrap is a spring model; a planning check, not a
 certification. The robot build is tested on the demo order and three random orders, not on every order.
+
+## UR10e cell (21 Nov morning, his yes: "yes, lets build it")
+
+The floating hand is replaced by a UR10e (mujoco_menagerie model, Apache 2.0; scaled 1:5 like the cell by
+`tools/make_ur10e_cell.cjs`) with a vacuum gripper, on a pedestal behind the pallet; the boxes wait on a raised infeed
+table round it. `src/ik.js` turns every move into joint angles (damped least squares on MuJoCo's Jacobian);
+`src/arm.js` has the same skills as the hand (pick-and-place with checks, closed loop on the box, repair), paths go
+round the base above the skyline of what stands on the table. `?hand` opens the old hand version (camera demo);
+`?noai` plans by search only (offline backup).
+
+Tests (Node, no AI): demo plan 0 mm off per box, with uneven frames too; 6 of 6 random pool orders planned by the AI
+and built; knocked box repaired. Payload: the UR10e datasheet says 12.5 kg; heavier boxes are flagged in the log.
+Gemini key is on the free tier: gemini-3.8-flash allows 20 requests a day and was used up by tests this morning.

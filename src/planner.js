@@ -1,6 +1,6 @@
 // LoadProof's planner (Gemini) and the checks every pallet plan must pass before the hand touches a box:
 // 1. warehouse rules  2. it stands (physics)  3. the 0.5 g truck test (physics, after EUMOS 40509).
-import { ORDER, PALLET, size, kind, SPOTS, wrapBoxes } from './pallet.js'
+import { ORDER, PALLET, size, kind, SPOTS, wrapBoxes, parkArm } from './pallet.js'
 
 const KEY = import.meta.env?.VITE_GEMINI_API_KEY ?? globalThis.GEMINI_KEY // the page reads .env.local; Node tests set GEMINI_KEY
 const MODELS = ['gemini-3.5-flash-lite', 'gemini-3.8-flash'] // fast first; the stronger one if the fast one keeps failing
@@ -172,9 +172,12 @@ function worldWith(mujoco, model, plan) {
   const d = new mujoco.MjData(model)
   const body = (n) => mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, n)
   const qadr = (n) => model.jnt_qposadr[model.body_jntadr[body(n)]]
-  const fa = qadr('rh_forearm')
-  d.qpos[fa] = -0.8; d.qpos[fa + 2] = 0.6
-  d.mocap_pos.set([-0.8, 0, 0.6])
+  parkArm(mujoco, model, d) // the arm (if this is the arm cell) parked, out of the way
+  if (body('rh_forearm') >= 0) { // the hand, moved far away
+    const fa = qadr('rh_forearm')
+    d.qpos[fa] = -0.8; d.qpos[fa + 2] = 0.6
+    d.mocap_pos.set([-0.8, 0, 0.6])
+  }
   for (const b of plan.blocks) d.qpos.set([b.x, b.y, b.z, 1, 0, 0, 0], qadr(b.block))
   mujoco.mj_forward(model, d)
   return { d, pos: (n) => { const i = 3 * body(n); return [d.xpos[i], d.xpos[i + 1], d.xpos[i + 2]] } }
