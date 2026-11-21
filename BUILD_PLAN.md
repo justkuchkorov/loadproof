@@ -36,6 +36,36 @@ later. He sleeps; the laptop stays plugged in with the lid OPEN (closing it slee
       Before naming any packaging standard (ISO 3394?), check it.
 - [ ] 9. Later, only after 1–8 work and Abdi agrees: a whole-truck simulation.
 
-## Morning summary
+## Morning summary (written 02:15)
 
-(written at the end)
+All of 1-8 are built, tested and committed, one commit each (any one can be removed: ).
+Item 9 (whole truck) is NOT started: it waits for your yes.
+
+**Open the app:**  in this folder, then http://localhost:5173 (slides: /pitch/slides.html,
+backup recording: /pitch/backup.html, both work offline).
+
+**Try each, in this order (about 5 minutes):**
+1. ⚖️ Compare, then 🚚 Truck test: LoadProof pallet PASSES (1 mm), rushed pallet FAILS (about 1.5 m).
+2. R, then 🤖 LoadProof: plan & build (robot switch on): the robot builds the 8 boxes from the group on the left.
+3. 💥 Knock a box: one top box is shoved; the robot measures every box and puts it back.
+4. 🎞 Wrap, then 🚚 Truck test: film around the load. Then move the push slider to 0.8 g and test again.
+5. 📄 Report: a printable page (allow pop-ups if the browser asks).
+6. change order -> 🎲 Random order -> Load this order -> LoadProof. Turn the robot switch off for a quick result.
+7. 🧠 Memory (under the buttons): lessons collect as plans are checked.
+8. ⏺ Record (top right): record your own backup video in the morning, in full quality.
+
+**Test results (Node, same code as the page):**
+- AI planned 6/6 random orders, each on the first try, 1-4 s. The robot built 3/3 random orders.
+- The demo order's AI plan builds 4/4 with uneven frame times. Knocked boxes repaired 4/4.
+- Push strength: rushed fails from 0.3 g; AI plan holds to 0.5 g (0.6 g wrapped); rushed + wrap still fails 0.5 g.
+- Above 0.6 g any unwrapped box slides (friction 0.6): EN 12195-1 uses 0.8 g forward, so real trucks need straps.
+
+**If time is short at the event, cut in this order:** 7 (memory panel) -> 6 (report) -> 5 (wrap) -> 1 (editor).
+Keep Compare + Truck test + the robot build: that is the story.
+
+**Pitch:** pitch/PITCH.md (a draft to say in your own words: every number has its source or is marked ours),
+pitch/slides.html (4 slides, arrow keys, f = full screen).
+
+**Known limits (say them before a judge does):** 1:5 simulation; assisted grip (a lock, like a suction gripper); the
+forearm stub does not collide (an arm from above is assumed); wrap is a spring model; a planning check, not a
+certification. The robot build is tested on the demo order and three random orders, not on every order.
