@@ -19,11 +19,14 @@
     #build { background: #1f6feb; }
     #build:disabled { opacity: 0.6; cursor: default; }
     #stop { background: #30363d; }
-    #truck { background: #9e6a03; flex: 1.6; }
+    #truck { background: #9e6a03; flex: 0 0 auto; white-space: nowrap; }
     #compare { background: #6639ba; flex: 1; }
     #knock { background: #8e1519; flex: 1; }
     #wrap { background: #1b4b5a; flex: 0.8; }
     #report { background: #30363d; flex: 0.8; }
+    .slider { margin-top: 6px; align-items: center; gap: 8px; font-size: 12px; }
+    .slider input { flex: 1; accent-color: #9e6a03; }
+    #gnote { white-space: nowrap; min-width: 150px; font-size: 11px; }
     #worker { background: #6e4a1f; flex: 1; }
     #build { flex: 1.4; }
     #agent .head { margin-bottom: 4px; }
@@ -88,7 +91,10 @@
       <button id="knock" title="Shove one box of the finished LoadProof pallet; the robot measures every box and repairs it">💥 Knock a box</button>
       <button id="wrap" title="Wrap what stands on the pallets in stretch film (press again to unwrap)">🎞 Wrap</button>
       <button id="report" title="A printable load stability report for the last LoadProof plan">📄 Report</button>
-      <button id="truck" title="Push the load at 0.5 g, like a truck braking or swerving (after the EU test EUMOS 40509)">🚚 Truck test (0.5 g)</button>
+    </div>
+    <div class="row slider" title="0.5 g: the EU load test EUMOS 40509. 0.8 g: the braking value of EN 12195-1, for which loads need straps or the front wall">
+      <button id="truck" title="Push the load like a truck swerving, then braking">🚚 Truck test (0.5 g)</button>
+      <input type="range" id="g" min="0.3" max="0.8" step="0.1" value="0.5"><span id="gnote" class="dim">0.5 g · EU load test</span>
     </div>
     <details id="memory"><summary id="memstats">🧠 Memory</summary>
       <ul id="lessons"></ul>

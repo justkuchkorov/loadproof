@@ -290,7 +290,15 @@ async function main() {
   truckButton.onclick = () => {
     if (agentBusy || truck.running) return
     logEl.innerHTML = ''
-    if (truck.start(0.5)) parked = true
+    if (truck.start(Number(gSlider.value))) parked = true
+  }
+  // How hard the truck pushes: 0.5 g is the EU load test (EUMOS 40509); 0.8 g is the braking value of EN 12195-1.
+  const gSlider = document.getElementById('g')
+  const NOTES = { 0.3: 'gentle', 0.4: 'moderate', 0.5: 'EU load test', 0.6: 'hard', 0.7: 'very hard', 0.8: 'braking (EN 12195-1)' }
+  gSlider.oninput = () => {
+    const g = Number(gSlider.value).toFixed(1)
+    document.getElementById('gnote').textContent = `${g} g · ${NOTES[g]}`
+    truckButton.textContent = `🚚 Truck test (${g} g)`
   }
   const safe = PARK
   let parked = true // starts parked high (the pallet stays visible); after a truck test it parks again

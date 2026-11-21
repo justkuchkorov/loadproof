@@ -31,7 +31,7 @@ later. He sleeps; the laptop stays plugged in with the lid OPEN (closing it slee
 - [x] 5. Stretch wrap: a wrap option (boxes held together softly, as wrap does). If no stacking passes, the AI
       recommends wrapping; the truck test shows the difference.
 - [x] 6. Load stability report: one printable page per pallet — order, layers, checks, truck test numbers, PASS/FAIL.
-- [ ] 7. Push slider: 0.3–0.8 g for the truck test (0.5 g = EU test EUMOS 40509; 0.8 g = emergency braking).
+- [x] 7. Push slider: 0.3–0.8 g for the truck test (0.5 g = EU test EUMOS 40509; 0.8 g = emergency braking).
 - [ ] 8. Pitch: a 3-minute script, 3–4 slides, and a backup recording of the demo (frames from headless Chrome).
       Before naming any packaging standard (ISO 3394?), check it.
 - [ ] 9. Later, only after 1–8 work and Abdi agrees: a whole-truck simulation.
