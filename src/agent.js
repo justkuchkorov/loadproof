@@ -68,8 +68,7 @@ export async function runAgent({ request, mujoco, model, robot, log, preview, re
 export async function build(plan, { robot, log, reset, feed }) {
   // Layer by layer; inside a layer the NEAR row first (the open fingers reach 6-8 cm forward past the box), and inside
   // a row the RIGHT box first (the thumb sticks out to the left): the hand always reaches into empty space.
-  const bottomOf = (b) => Math.round((b.z - BLOCKS[b.block].size[2] / 2) * 200)
-  plan = { ...plan, blocks: [...plan.blocks].sort((p, q) => bottomOf(p) - bottomOf(q) || p.x - q.x || p.y - q.y) }
+  plan = { ...plan, blocks: buildOrder(plan.blocks) }
   log('step', 'Only now the robot builds it')
   reset()
   robot.start()
@@ -95,6 +94,38 @@ export async function build(plan, { robot, log, reset, feed }) {
     placed.push(b)
   }
   await robot.home()
+}
+
+// Layer by layer; inside a layer the NEAR row first, inside a row the RIGHT box first (see build()).
+export function buildOrder(blocks) {
+  const bottomOf = (b) => Math.round((b.z - BLOCKS[b.block].size[2] / 2) * 200)
+  return [...blocks].sort((p, q) => bottomOf(p) - bottomOf(q) || p.x - q.x || p.y - q.y)
+}
+
+// Is this box where the plan put it? (within 15 mm sideways and 6 mm in height)
+const inPlace = (b, robot) => { const p = robot.P(b.block); return Math.hypot(p[0] - b.x, p[1] - b.y) < 0.015 && Math.abs(p[2] - b.z) < 0.006 }
+
+// Measure every box of a built pallet against the plan; pick up whatever moved and put it back, lowest first.
+export async function repair(plan, { robot, log }) {
+  const order = buildOrder(plan.blocks)
+  const off = order.filter((b) => !inPlace(b, robot))
+  if (off.length === 0) { log('ok', 'Measured every box: all where the plan says'); return true }
+  const mmOff = (b) => (Math.hypot(...robot.P(b.block).map((v, k) => v - [b.x, b.y, b.z][k])) * 1000).toFixed(0)
+  log('fail', `Measured every box: ${off.map((b) => `${BLOCKS[b.block].name} is ${mmOff(b)} mm off`).join(', ')}`)
+  robot.start()
+  for (const b of off) {
+    const below = order.slice(0, order.indexOf(b))
+    for (let fix = 0; fix < 2; fix++) {
+      log('step', `Putting the ${BLOCKS[b.block].name} back${fix ? ' (again)' : ''}`)
+      const r = await robot.pickPlace(b.block, onWhatIsReallyThere(b, below, robot), { gentle: true })
+      if (r.ok && inPlace(b, robot)) { log('ok', `The ${BLOCKS[b.block].name} is back in place`); break }
+    }
+  }
+  await robot.home()
+  const still = order.filter((b) => !inPlace(b, robot))
+  if (still.length) log('fail', `Still out of place: ${still.map((b) => BLOCKS[b.block].name).join(', ')}`)
+  else log('done', 'Pallet repaired: every box measured and in place')
+  return still.length === 0
 }
 
 // A box that rests on others goes where those boxes REALLY ended up, not where the plan said.

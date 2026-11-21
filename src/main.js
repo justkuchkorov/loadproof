@@ -5,7 +5,7 @@ import { retarget } from './retarget.js'
 import { createReach } from './reach.js'
 import { createGrasp, FIST } from './grasp.js'
 import { createRobot } from './robot.js'
-import { runAgent, checkPlan } from './agent.js'
+import { runAgent, checkPlan, repair } from './agent.js'
 import { BLOCKS, setOrder } from './planner.js'
 import { ORDER, CATALOG, PALLET, PALLET_B, sceneXml, workersStack, orderFrom, randomOrder, copyId } from './pallet.js'
 import { createTruckTest } from './truck.js'
@@ -213,6 +213,26 @@ async function main() {
     } catch (err) {
       log('fail', 'Compare: ' + err.message)
     }
+    agentBusy = false
+  }
+
+  // Sabotage: shove one top box of the finished LoadProof pallet; the robot measures everything and repairs it.
+  document.getElementById('knock').onclick = async () => {
+    if (agentBusy || truck.running) return
+    const plan = lastGoodPlan
+    const onPallet = plan && plan.blocks.every((b) => Math.hypot(...robot.P(b.block).map((v, k) => v - [b.x, b.y, b.z][k])) < 0.02)
+    if (!onPallet) { log('fail', 'Knock: build a LoadProof pallet first'); return }
+    agentBusy = true
+    const tops = plan.blocks.filter((b) => !plan.blocks.some((o) => o !== b && o.z > b.z + 0.01 && Math.abs(o.x - b.x) < 0.05 && Math.abs(o.y - b.y) < 0.07))
+    const victim = tops[Math.floor(Math.random() * tops.length)]
+    const id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, victim.block)
+    const v = model.jnt_dofadr[model.body_jntadr[id]]
+    const out = Math.sign(victim.y - PALLET.y) || 1
+    data.qvel.set([0.05, 0.45 * out, 0.15, 0, 0, 0], v) // a shove sideways, off its spot
+    log('fail', `💥 Someone knocked the ${BLOCKS[victim.block].name}`)
+    await new Promise((res) => setTimeout(res, 1500))
+    try { await repair(plan, { robot, log }) } catch (err) { log('fail', err.message === 'stopped' ? 'Stopped.' : 'Repair: ' + err.message) }
+    for (let k = 0; k < 3; k++) move[k] = data.mocap_pos[k]
     agentBusy = false
   }
 

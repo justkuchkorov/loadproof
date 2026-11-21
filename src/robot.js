@@ -59,7 +59,8 @@ export function createRobot({ mujoco, model, data, debug = () => {} }) {
     // a box that was knocked slightly crooked is straightened, so it cannot spoil the stack.
     const q = Q(o)
     const yaw = Math.atan2(2 * (q[0] * q[3] + q[1] * q[2]), 1 - 2 * (q[2] * q[2] + q[3] * q[3]))
-    const rq = qmul(qconj(Q(palm)), [Math.cos(yaw / 2), 0, 0, Math.sin(yaw / 2)])
+    const square = Math.round(yaw / Math.PI) * Math.PI // a box knocked crooked is turned back square to the pallet grid
+    const rq = qmul(qconj(Q(palm)), [Math.cos(square / 2), 0, 0, Math.sin(square / 2)])
     const a = mujoco.mjNEQDATA * e // 12 numbers per constraint in MuJoCo 4.0
     const d = model.eq_data
     d.set([0, 0, 0, ...rel, ...rq, 1], a)
@@ -81,7 +82,9 @@ export function createRobot({ mujoco, model, data, debug = () => {} }) {
   }
 
   // Pick `obj` and set it down with its centre at `dest`. Checks the grab by measuring, retries up to 4 times.
-  async function pickPlace(obj, dest) {
+  // gentle: pick with the grip lock only, fingers kept open (for a box inside a packed pallet, where closing
+  // fingers would press it into its neighbours).
+  async function pickPlace(obj, dest, { gentle = false } = {}) {
     let ok = false
     let tries = 0
     while (!ok && tries < 4) {
@@ -95,8 +98,9 @@ export function createRobot({ mujoco, model, data, debug = () => {} }) {
       const s = S()
       const gap = Math.hypot(s[0] - P(obj)[0], s[1] - P(obj)[1]) // sideways distance, palm to box centre
       debug(`${obj} try ${tries}: block at ${p.map((v) => v.toFixed(3))}, palm-to-block ${(gap * 1000).toFixed(0)} mm, touching: ${touching()}`)
-      if (gap < 0.035 && s[2] < top + 0.03) lock(obj) // palm on the box: grip assist on
-      fingers = 'fist'
+      const locked = gap < 0.035 && s[2] < top + 0.03
+      if (locked) lock(obj) // palm on the box: grip assist on
+      fingers = gentle && locked ? 'up' : 'fist'
       await wait(0.5)
       holding = obj
       await glide([p[0], p[1], top + 0.05], 0.5)
@@ -141,7 +145,7 @@ export function createRobot({ mujoco, model, data, debug = () => {} }) {
   }
 
   return {
-    tick, pickPlace, P, S,
+    tick, pickPlace, P, S, touching, get phase() { return { goal: goal.map((v) => v.toFixed(3)).join(","), fingers, holding } },
     home: () => moveTo([0.18, 0, travelZ()], 0.8),
     stop() { stopped = true; motion = null; waiters = []; fingers = 'open'; releaseAll() },
     start() { stopped = false; goal = S() },
