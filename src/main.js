@@ -7,7 +7,7 @@ import { createGrasp, FIST } from './grasp.js'
 import { createRobot } from './robot.js'
 import { runAgent, checkPlan, repair } from './agent.js'
 import { BLOCKS, setOrder } from './planner.js'
-import { ORDER, CATALOG, PALLET, PALLET_B, sceneXml, workersStack, orderFrom, randomOrder, copyId } from './pallet.js'
+import { ORDER, CATALOG, PALLET, PALLET_B, sceneXml, workersStack, orderFrom, randomOrder, copyId, wrapBoxes } from './pallet.js'
 import { createTruckTest } from './truck.js'
 import * as memory from './memory.js'
 
@@ -62,6 +62,7 @@ async function main() {
     parked = true
     mujoco.mj_forward(model, data)
     if (typeof signs !== 'undefined') signs.forEach((s) => { s.visible = false })
+    if (typeof films !== 'undefined') { unwrap = null; films.clear() } // mj_resetData already switched the links off
   }
 
   // A ring on the table under the hand: grey = nothing below, green = close your hand to grab.
@@ -216,6 +217,30 @@ async function main() {
     agentBusy = false
   }
 
+  // Stretch wrap: hold each load on its pallet with soft film; a see-through film is drawn around each load.
+  const films = new THREE.Group()
+  sim.scene.add(films)
+  let unwrap = null
+  document.getElementById('wrap').onclick = () => {
+    if (agentBusy || truck.running) return
+    if (unwrap) { unwrap(); unwrap = null; films.clear(); log('info', '🎞 Wrap removed'); return }
+    const all = Object.keys(BLOCKS).flatMap((n) => [n, copyId(n)])
+    const loads = [PALLET, PALLET_B].map((pal) => all.filter((n) => { const p = robot.P(n); return Math.abs(p[0] - pal.x) < 0.12 && Math.abs(p[1] - pal.y) < 0.13 && p[2] > 0 }))
+    const names = loads.flat()
+    if (names.length === 0) { log('fail', '🎞 Nothing on a pallet to wrap'); return }
+    unwrap = wrapBoxes(mujoco, model, data, names)
+    for (const [i, group] of loads.entries()) {
+      if (!group.length) continue
+      const pal = [PALLET, PALLET_B][i]
+      const top = Math.max(...group.map((n) => robot.P(n)[2] + (BLOCKS[n] ?? BLOCKS['b' + n.slice(1)]).size[2] / 2))
+      const film = new THREE.Mesh(new THREE.BoxGeometry(pal.sx + 0.01, pal.sy + 0.01, top - pal.top + 0.004),
+        new THREE.MeshStandardMaterial({ color: 0xcfe8ff, transparent: true, opacity: 0.28, roughness: 0.2, metalness: 0.1, depthWrite: false }))
+      film.position.set(pal.x, pal.y, (top + pal.top) / 2)
+      films.add(film)
+    }
+    log('ok', `🎞 Wrapped ${loads.filter((l) => l.length).length === 2 ? 'both loads' : 'the load'} in stretch film`)
+  }
+
   // Sabotage: shove one top box of the finished LoadProof pallet; the robot measures everything and repairs it.
   document.getElementById('knock').onclick = async () => {
     if (agentBusy || truck.running) return
@@ -291,6 +316,7 @@ async function main() {
   if (auto) { ask.value = auto; startBuild() }
   if (new URLSearchParams(location.search).has('worker')) document.getElementById('worker').click()
   if (new URLSearchParams(location.search).has('compare')) document.getElementById('compare').onclick().then(() => { if (new URLSearchParams(location.search).has('truck')) document.getElementById('truck').click() })
+  if (new URLSearchParams(location.search).has('dowrap')) document.getElementById('wrap').click()
   if (new URLSearchParams(location.search).has('memopen')) document.getElementById('memory').open = true
   if (new URLSearchParams(location.search).has('editor')) document.getElementById('editor').classList.add('open')
 

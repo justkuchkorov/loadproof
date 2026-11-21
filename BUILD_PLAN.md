@@ -28,7 +28,7 @@ later. He sleeps; the laptop stays plugged in with the lid OPEN (closing it slee
       lessons go into the AI prompt. The panel shows "plans tested / failed / lessons".
 - [x] 4. Sabotage: a "Knock a box" button pushes one box of the finished pallet off; the robot measures the whole
       pallet, finds what moved and puts it back.
-- [ ] 5. Stretch wrap: a wrap option (boxes held together softly, as wrap does). If no stacking passes, the AI
+- [x] 5. Stretch wrap: a wrap option (boxes held together softly, as wrap does). If no stacking passes, the AI
       recommends wrapping; the truck test shows the difference.
 - [ ] 6. Load stability report: one printable page per pallet — order, layers, checks, truck test numbers, PASS/FAIL.
 - [ ] 7. Push slider: 0.3–0.8 g for the truck test (0.5 g = EU test EUMOS 40509; 0.8 g = emergency braking).

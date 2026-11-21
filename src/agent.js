@@ -61,7 +61,14 @@ export async function runAgent({ request, mujoco, model, robot, log, preview, re
     preview(null)
     return plan
   }
-  log('fail', 'No plan passed every check after 3 tries. Nothing was built.')
+  log('fail', 'No stacking passed every check after 3 tries. Nothing was built.')
+  // Last resort, as in a real warehouse: would stretch wrap make the best plan pass?
+  if (plan && checkRules(plan).length === 0 && checkPhysics(mujoco, model, plan).stands) {
+    const t = checkTransport(mujoco, model, plan, 0.5, { wrap: true })
+    const worst = Math.max(...t.results.map((r) => r.worst))
+    if (t.pass) log('info', `🎞 With stretch wrap, the last plan passes the truck test (worst ${mm(worst)} mm, limit ${mm(t.limit)} mm). Recommendation: wrap this pallet.`)
+    else log('fail', `🎞 Even wrapped, the last plan fails (${mm(worst)} mm). This order needs a different pallet or a second pallet.`)
+  }
   return null
 }
 

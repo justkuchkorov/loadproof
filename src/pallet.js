@@ -116,6 +116,8 @@ export function sceneXml(order = ORDER) {
       `<geom name="${id}" class="box" type="box" size="${sx / 2} ${sy / 2} ${sz / 2}" mass="${mass(b).toFixed(4)}" rgba="${COLORS[b.fragile]}"/></body>`
   }).join('\n')
   const grips = order.map((b) => `    <weld name="grip_${b.id}" body1="rh_palm" body2="${b.id}" active="false"/>`).join('\n')
+  // Stretch wrap: each box held to where it stands by a soft, springy link (off until the load is wrapped).
+  const wraps = order.flatMap((b) => [b.id, copyId(b.id)]).map((id) => `    <weld name="wrap_${id}" body1="${id}" active="false" solref="0.06 1"/>`).join('\n')
   return `<mujoco model="LoadProof pallet scene">
   <include file="hand_free.xml"/>
   <option gravity="0 0 -9.81"/>
@@ -139,6 +141,7 @@ ${copies}
   <equality>
     <weld body1="hand_target" body2="rh_forearm" solref="0.02 1"/>
 ${grips}
+${wraps}
   </equality>
 </mujoco>
 `
@@ -187,4 +190,25 @@ export const SPOTS = {
 export function waiting(mujoco, model, data, id) {
   const body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, id)
   return data.xpos[3 * body + 1] > STAGING_Y - 0.01
+}
+
+// Wrap: hold each named box to its CURRENT pose (soft weld to the world, like film holding the load).
+// d: the MjData to wrap in; names: boxes to wrap. Returns a function that unwraps.
+export function wrapBoxes(mujoco, model, d, names) {
+  const ids = []
+  for (const n of names) {
+    const e = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_EQUALITY.value, 'wrap_' + n)
+    if (e < 0) continue
+    const b = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, n)
+    const p = [0, 1, 2].map((k) => d.xpos[3 * b + k])
+    const q = [0, 1, 2, 3].map((k) => d.xquat[4 * b + k])
+    // the world's pose seen from the box: position -R^T p, orientation conj(q)
+    const c = [q[0], -q[1], -q[2], -q[3]]
+    const rot = (qq, v) => { const m = (a, b2) => [a[0] * b2[0] - a[1] * b2[1] - a[2] * b2[2] - a[3] * b2[3], a[0] * b2[1] + a[1] * b2[0] + a[2] * b2[3] - a[3] * b2[2], a[0] * b2[2] - a[1] * b2[3] + a[2] * b2[0] + a[3] * b2[1], a[0] * b2[3] + a[1] * b2[2] - a[2] * b2[1] + a[3] * b2[0]]; return m(m(qq, [0, ...v]), [qq[0], -qq[1], -qq[2], -qq[3]]).slice(1) }
+    const rel = rot(c, p).map((v) => -v)
+    model.eq_data.set([0, 0, 0, ...rel, ...c, 1], mujoco.mjNEQDATA * e)
+    d.eq_active[e] = 1
+    ids.push(e)
+  }
+  return () => { for (const e of ids) d.eq_active[e] = 0 }
 }

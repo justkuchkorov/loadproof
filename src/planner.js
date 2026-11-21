@@ -1,6 +1,6 @@
 // LoadProof's planner (Gemini) and the checks every pallet plan must pass before the hand touches a box:
 // 1. warehouse rules  2. it stands (physics)  3. the 0.5 g truck test (physics, after EUMOS 40509).
-import { ORDER, PALLET, size, kind, SPOTS } from './pallet.js'
+import { ORDER, PALLET, size, kind, SPOTS, wrapBoxes } from './pallet.js'
 
 const KEY = import.meta.env?.VITE_GEMINI_API_KEY ?? globalThis.GEMINI_KEY // the page reads .env.local; Node tests set GEMINI_KEY
 const MODELS = ['gemini-3.5-flash-lite', 'gemini-3.8-flash'] // fast first; the stronger one if the fast one keeps failing
@@ -192,7 +192,7 @@ export function checkPhysics(mujoco, model, plan) {
 // Physics check 2, the truck test after EUMOS 40509: push at `g` for 0.5 s in each of four directions.
 // Pass: every box moved less than 5% of the load's height.
 export const PUSH_DIRECTIONS = [['to the right', [0, -1]], ['to the left', [0, 1]], ['forward (braking)', [1, 0]], ['backward', [-1, 0]]]
-export function checkTransport(mujoco, model, plan, g = 0.5) {
+export function checkTransport(mujoco, model, plan, g = 0.5, { wrap = false } = {}) {
   const height = Math.max(...plan.blocks.map(top))
   const limit = 0.05 * height
   const gravity = Array.from(model.opt.gravity)
@@ -201,6 +201,7 @@ export function checkTransport(mujoco, model, plan, g = 0.5) {
     const { d, pos } = worldWith(mujoco, model, plan)
     try {
       run(mujoco, model, d, 0.5)
+      if (wrap) wrapBoxes(mujoco, model, d, plan.blocks.map((b) => b.block))
       const before = plan.blocks.map((b) => pos(b.block))
       model.opt.gravity.set([dir[0] * g * 9.81, dir[1] * g * 9.81, -9.81]) // inside the truck, the push feels like tilted gravity
       run(mujoco, model, d, 0.5)
