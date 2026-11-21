@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>LoadProof remote</title>
+  <style>
+    :root { --bg: #0f1720; --panel: #161b22; --line: #30363d; --text: #e6edf3; --dim: #8b949e; --blue: #1f6feb; --green: #3fb950; --red: #f85149; --wood: #c8a06a; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.35 system-ui, -apple-system, Segoe UI, sans-serif; padding: 12px 14px 24px; }
+    h1 { font-size: 18px; margin: 0; display: flex; align-items: center; gap: 8px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); display: inline-block; }
+    .dot.on { background: var(--green); }
+    .status { margin: 8px 0 10px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-height: 38px; }
+    .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
+    button { font: inherit; color: var(--text); background: #21262d; border: 1px solid var(--line); border-radius: 10px; padding: 12px 6px; min-height: 52px; touch-action: manipulation; }
+    button:active { transform: scale(0.97); }
+    button.blue { background: var(--blue); border-color: var(--blue); }
+    button.green { background: #1f5f2c; border-color: var(--green); }
+    button.red { background: #5c1d1d; border-color: var(--red); }
+    h2 { font-size: 13px; color: var(--dim); font-weight: 600; margin: 14px 0 6px; text-transform: uppercase; letter-spacing: .04em; }
+    .boxes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .box { background: #3a2c1a; border-color: var(--wood); text-align: left; padding: 10px; }
+    .box.sel { outline: 3px solid var(--green); }
+    .box.next::after { content: ' ★ next'; color: #f2cc60; font-size: 12px; }
+    .box .f { color: var(--red); font-size: 11px; font-weight: 700; }
+    .pallet { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 6px; aspect-ratio: 6 / 8; max-width: 300px; margin: 0 auto; background: #5b4630; padding: 6px; border-radius: 8px; }
+    .spot { border-radius: 8px; font-size: 13px; padding: 6px; }
+    .spot.ok { background: #1f5f2c; border-color: var(--green); }
+    .spot.bad { background: #5c1d1d; border-color: var(--red); }
+    .spot.pend { outline: 3px solid #f2cc60; }
+    .spot.sugg::before { content: '★ '; color: #f2cc60; }
+    .verdict { margin: 8px 0; font-size: 14px; }
+    .verdict.bad { color: #ff9b94; } .verdict.ok { color: #7ee787; }
+    .log { font-size: 12px; color: var(--dim); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+    .log div { padding: 2px 0; } .log .ok { color: #7ee787; } .log .fail { color: #ff9b94; } .log .done { color: var(--green); font-weight: 600; }
+    .hidden { display: none; }
+    .hint { color: var(--dim); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1><span id="dot" class="dot"></span> LoadProof remote</h1>
+  <div id="status" class="status">Connecting to the LoadProof page on the laptop…</div>
+
+  <div class="row">
+    <button id="build" class="blue">🤖 AI builds</button>
+    <button id="worker">👆 I choose</button>
+    <button id="stop" class="red">⏹ Stop</button>
+  </div>
+  <div class="row">
+    <button id="truck5">🚚 0.5 g</button>
+    <button id="truck8">🚚 0.8 g</button>
+    <button id="wrap">🎞 Wrap</button>
+  </div>
+
+  <div id="workerui" class="hidden">
+    <h2>1 · Choose a box</h2>
+    <div id="boxes" class="boxes"></div>
+    <div id="spotui" class="hidden">
+      <h2>2 · Choose its spot <span class="hint">(★ = LoadProof's suggestion · near side at the bottom)</span></h2>
+      <div id="pallet" class="pallet"></div>
+      <div id="verdict" class="verdict"></div>
+      <button id="place" class="green hidden" style="width: 100%">Place it here</button>
+    </div>
+  </div>
+
+  <h2>Log</h2>
+  <div id="log" class="log"></div>
+  <script type="module" src="/src/remote.js"></script>
+</body>
+</html>

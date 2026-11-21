@@ -97,6 +97,12 @@ export function createWorker({ robot, log, preview, suggestion }) {
 
   return {
     select, choose, next,
+    // Every spot for the chosen box, with LoadProof's verdict, and which one it suggests (for the phone remote).
+    verdicts() {
+      if (!selected) return []
+      const best = suggest()?.spot
+      return Object.keys(SPOTS[BLOCKS[selected].kind]).map((spot) => { const s = spotFor(spot); return { spot, ok: !s.problems.length, layer: s.layer, problems: s.problems, suggested: spot === best } })
+    },
     waiting, placed,
     get selected() { return selected },
     get pending() { return pending?.spot ?? null }, // the spot shown now (LoadProof's suggestion after a choice)

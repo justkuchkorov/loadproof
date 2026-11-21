@@ -431,6 +431,36 @@ async function main() {
     if (BLOCKS[hit.body] && worker.waiting().includes(hit.body)) worker.select(hit.body)
     else if (worker.selected && Math.abs(hit.point[0] - PALLET.x) < PALLET.sx / 2 + 0.02 && Math.abs(hit.point[1] - PALLET.y) < PALLET.sy / 2 + 0.02) worker.choose([hit.point[0], hit.point[1]])
   })
+  // 📱 The phone remote (remote.html): its taps arrive here through the dev server; the page's state goes back to it.
+  let remoteSeen = 0
+  if (import.meta.hot && ARM_CELL) {
+    import.meta.hot.on('remote:cmd', async (c) => {
+      remoteSeen = performance.now()
+      if (c.cmd === 'hello') return
+      log('info', `📱 Remote: ${c.cmd}${c.box ? ' ' + BLOCKS[c.box]?.name : ''}${c.spot ? ' ' + c.spot : ''}`)
+      if (c.cmd === 'worker') { if (!worker) await startWorker() }
+      else if (c.cmd === 'endworker') { if (worker) await startWorker() }
+      else if (c.cmd === 'select') worker?.select(c.box)
+      else if (c.cmd === 'choose') worker?.choose(c.spot)
+      else if (c.cmd === 'build') { if (worker && !worker.busy) endWorker(); startBuild() }
+      else if (c.cmd === 'truck') { gSlider.value = String(c.g ?? 0.5); gSlider.oninput(); truckButton.onclick() }
+      else if (c.cmd === 'wrap') document.getElementById('wrap').onclick()
+      else if (c.cmd === 'stop') robot.stop()
+    })
+    setInterval(() => {
+      if (performance.now() - remoteSeen > 10000) return // no phone connected
+      import.meta.hot.send('remote:state', {
+        status: status.textContent, worker: !!worker, busy: agentBusy, truck: truck.running,
+        boxes: Object.keys(BLOCKS).map((id) => ({ id, name: BLOCKS[id].name, kind: BLOCKS[id].kind, fragile: !!BLOCKS[id].fragile, waiting: worker ? worker.waiting().includes(id) : null })),
+        selected: worker?.selected ?? null, next: worker?.next() ?? null, pending: worker?.pending ?? null, spots: worker?.verdicts() ?? [],
+        log: [...logEl.children].slice(-6).map((li) => [li.className, li.textContent]),
+      })
+    }, 400)
+    fetch('/__remote-url').then((r) => r.json()).then(({ urls }) => {
+      const el = document.getElementById('remoteurl')
+      if (el && urls.length) el.innerHTML = '📱 Phone remote (same Wi-Fi): ' + urls.map((u) => `<b>${u}</b>`).join(' or ')
+    }).catch(() => {})
+  }
   if (new URLSearchParams(location.search).has('autostart')) startButton.click()
   const auto = new URLSearchParams(location.search).get('build')
   if (auto) { ask.value = auto; startBuild() }
