@@ -14,7 +14,7 @@
     #start:disabled { opacity: 0.6; cursor: default; }
     #rec { position: fixed; top: 12px; right: 150px; padding: 8px 14px; font: inherit; border: 0; border-radius: 6px; background: #30363d; color: #fff; cursor: pointer; }
     #rec.on { background: #da3633; }
-    #camwrap { display: none; position: fixed; right: 12px; bottom: 12px; width: 320px; height: 240px; border-radius: 8px; overflow: hidden; border: 1px solid #30363d; transform: scaleX(-1); }
+    #camwrap { display: none; position: fixed; right: 12px; bottom: 236px; width: 320px; height: 240px; border-radius: 8px; overflow: hidden; border: 1px solid #30363d; transform: scaleX(-1); }
     #camwrap video, #camwrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
     #agent { position: fixed; left: 12px; bottom: 12px; width: min(470px, calc(100vw - 24px)); background: #0d1117e6; border: 1px solid #30363d; border-radius: 8px; padding: 10px; box-sizing: border-box; }
     #agent .row { display: flex; gap: 6px; }
@@ -84,6 +84,7 @@
     </div>
     <div class="row">
       <button id="worker" title="Stack the boxes the way a rushed worker would: in the order they arrived, in columns">👷 Rushed worker</button>
+      <button id="takeover" title="Steer the robot with your own hand through the webcam: the manual backup when a person must take over">✋ Take over</button>
       <button id="build" title="The agent reads the order, plans with the search, tests in physics (EU 0.5 g, hard braking 0.8 g), decides on wrap and straps, and has the robot build it">🤖 LoadProof: plan &amp; build</button>
     </div>
     <div class="row" style="margin-top: 6px">

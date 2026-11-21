@@ -59,6 +59,7 @@ export function createArm({ mujoco, model, data, debug = () => {}, eye = null })
   // The force the cup must hold while carrying: the box's real mass times (its acceleration minus gravity), from its
   // measured velocity. Above CUP_N the seal breaks and the box drops.
   let carrying = false, vPrev = null, aF = null, cupPeak = 0, dropped = null
+  let manual = null // a point a person steers the pad to (takeover.js); followed when no planned motion runs
 
   // Called every frame: move the goal along the path, turn it into joint angles, send them to the motors.
   function tick(dt) {
@@ -79,6 +80,10 @@ export function createArm({ mujoco, model, data, debug = () => {}, eye = null })
           if (m.i >= m.pts.length - 1) { motion = null; m.resolve() }
         }
       }
+    }
+    if (!motion && manual) { // followed in a straight line at the normal speed
+      const d = manual.map((v, k) => v - goal[k]), dist = Math.hypot(...d)
+      if (dist > 1e-5) goal = goal.map((v, k) => v + d[k] * Math.min(1, SPEED * dt / dist))
     }
     waiters = waiters.filter((w) => (w.until <= time ? (w.resolve(), false) : true))
     if (holding && carrying && dt > 0) {
@@ -207,8 +212,8 @@ export function createArm({ mujoco, model, data, debug = () => {}, eye = null })
   let grip = [0, 0, 0] // the held box's centre relative to the pad, as measured at the pick
   const est = (obj) => eye ? S().map((v, k) => v + grip[k]) : P(obj)
 
-  // Pick `obj` and set it down with its centre at `dest`. Checks the grab (vacuum), retries up to 3 times.
-  async function pickPlace(obj, dest) {
+  // Pick `obj`: find it, put the cup on it, vacuum on, lift. Checks the grab (vacuum), retries up to 3 times.
+  async function pick(obj) {
     let ok = false
     let tries = 0
     while (!ok && tries < 3) {
@@ -233,7 +238,12 @@ export function createArm({ mujoco, model, data, debug = () => {}, eye = null })
     }
     if (!ok) return { ok: false, tries }
     cupPeak = 0; dropped = null; carrying = true
+    return { ok: true, tries }
+  }
 
+  // Set the held box `obj` down with its centre at `dest`.
+  async function place(obj, dest, tries = 1) {
+    if (dropped || holding !== obj) return { ok: false, tries, dropped: !!dropped, cupN: Math.round(cupPeak) }
     // Closed loop on the BOX: the arm bends a little under the load, so measure where the box really is and shift
     // the goal by the error until the box itself is `up` metres above `dest`.
     const cap = (v) => Math.max(-0.02, Math.min(0.02, v)) // a box that slipped must not send the arm away
@@ -255,6 +265,12 @@ export function createArm({ mujoco, model, data, debug = () => {}, eye = null })
     return { ok: true, tries, cupN: Math.round(cupPeak) }
   }
 
+  // Pick `obj` and set it down with its centre at `dest`.
+  async function pickPlace(obj, dest) {
+    const r = await pick(obj)
+    return r.ok ? place(obj, dest, r.tries) : r
+  }
+
   const ARM_BODIES = new Set(['base', 'shoulder_link', 'upper_arm_link', 'forearm_link', 'wrist_1_link', 'wrist_2_link', 'wrist_3_link', 'suction'])
   function touching() {
     const out = []
@@ -269,7 +285,10 @@ export function createArm({ mujoco, model, data, debug = () => {}, eye = null })
   }
 
   return {
-    tick, pickPlace, P, S, touching,
+    tick, pickPlace, pick, place, clearAt, P, S, touching,
+    steer(p) { manual = p ? p.slice() : null }, // the takeover's target for the pad (null: stop following)
+    get goal() { return goal.slice() },
+    get holding() { return holding },
     payloadKg: 12.5, // UR10e datasheet (universal-robots.com)
     cupN: CUP_N,
     get seen() { return seen },
@@ -279,7 +298,7 @@ export function createArm({ mujoco, model, data, debug = () => {}, eye = null })
     home: () => moveTo(ARM.park),
     park() { if (!motion) moveTo(ARM.park).catch(() => {}) },
     // Stop: let the waiting skill wake up; its next move then throws 'stopped', so the agent ends cleanly.
-    stop() { stopped = true; const m = motion, w = waiters; motion = null; waiters = []; holding = null; carrying = false; releaseAll(); m?.resolve(); w.forEach((x) => x.resolve()) },
+    stop() { manual = null; stopped = true; const m = motion, w = waiters; motion = null; waiters = []; holding = null; carrying = false; releaseAll(); m?.resolve(); w.forEach((x) => x.resolve()) },
     start() { stopped = false; goal = S() },
     // After mj_resetData the arm stands parked again (its motors hold the parked pose): match the controller to it.
     resetPose() { motion = null; waiters = []; holding = null; stopped = false; goal = ARM.park.slice(); qT = parkQ.slice(); for (const k of Object.keys(expected)) delete expected[k]; parkArm(mujoco, model, data) },

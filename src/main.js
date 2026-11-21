@@ -7,6 +7,7 @@ import { createGrasp, FIST } from './grasp.js'
 import { createRobot } from './robot.js'
 import { createArm, prepareArm } from './arm.js'
 import { createCamera } from './camera.js'
+import { createTakeover } from './takeover.js'
 import { checkPlan, repair } from './agent.js'
 import { runLoadAgent, readOrder, quickPlan } from './loadagent.js'
 import { BLOCKS, setOrder } from './planner.js'
@@ -402,7 +403,9 @@ async function main() {
   window.addEventListener('keydown', (e) => {
     if (e.target === ask) return
     if (e.key === 'c' && lastHand) reach.calibrate(lastHand.image)
+    if (e.key === 'c' && takeover) takeover.recentre()
     if (e.key === 'r' && !agentBusy) reset()
+    if (e.key === 'r' && takeover) { takeButton.click(); reset() }
   })
 
   let tracker = null
@@ -423,6 +426,31 @@ async function main() {
     }
   }
 
+  // ✋ Take over: your hand steers the UR10e through the webcam (the manual backup to the agent).
+  let takeover = null
+  const takeButton = document.getElementById('takeover')
+  if (!ARM_CELL) takeButton.style.display = 'none'
+  takeButton.onclick = async () => {
+    if (takeover) { // hand control off: the robot parks
+      takeover = null; agentBusy = false; robot.steer(null); preview(null)
+      takeButton.textContent = '✋ Take over'
+      document.getElementById('camwrap').style.display = 'none'
+      robot.home().catch(() => {})
+      log('info', '✋ Takeover ended: the robot parks')
+      return
+    }
+    if (agentBusy || truck.running) { log('fail', '✋ Stop the agent first'); return }
+    takeButton.disabled = true
+    try {
+      if (!tracker) tracker = await createTracker(document.getElementById('cam'), document.getElementById('overlay'))
+      document.getElementById('camwrap').style.display = 'block'
+      agentBusy = true; robot.start()
+      takeover = createTakeover({ robot, log, preview })
+      takeButton.textContent = '✋ End takeover'
+      log('you', '✋ Takeover: your hand steers the robot. Hold your hand in the middle of the picture to start (C re-centres). Palm = where the cup goes; pinch thumb and index finger = vacuum on; open = put it down.')
+    } catch (err) { log('fail', '✋ Camera: ' + err.message) }
+    takeButton.disabled = false
+  }
   if (new URLSearchParams(location.search).has('autostart')) startButton.click()
   const auto = new URLSearchParams(location.search).get('build')
   if (auto) { ask.value = auto; startBuild() }
@@ -441,7 +469,7 @@ async function main() {
     // 1. Read your hand: finger angles, how closed it is, and where it points on the table.
     const hand = tracker ? tracker.update() : null
     let curl = 0
-    if (hand) {
+    if (hand && !ARM_CELL) {
       lastHand = hand
       const goals = retarget(hand.world, hand.handedness)
       for (const [name, value] of Object.entries(goals)) {
@@ -459,9 +487,14 @@ async function main() {
     if (ARM_CELL) {
       // The UR10e: its controller always runs (building, holding still, or parked during the truck test).
       if (truck.running) truck.tick(simDt)
+      let manual = null
+      if (takeover) { // a person steers the arm with their hand (webcam)
+        manual = takeover.update(hand)
+        ring.visible = !!manual.ring
+        if (manual.ring) { ring.position.x = manual.ring[0]; ring.position.y = manual.ring[1]; ring.material.color.set(manual.near ? 0x3fb950 : 0x8b949e) }
+      } else ring.visible = false
       if (simDt > 0) robot.tick(simDt)
-      ring.visible = false
-      const text = truck.running ? '🚚 Truck test running…' : agentBusy ? 'The UR10e is building · press Stop to stop it' : `Ready · ${HELP}`
+      const text = manual ? manual.text : truck.running ? '🚚 Truck test running…' : agentBusy ? 'The UR10e is building · press Stop to stop it' : `Ready · ${HELP}`
       if (status.textContent !== text) status.textContent = text
     } else if (truck.running) {
       // 2c. Truck test: hand parked high and open, gravity tilted by the test, slow motion during the pushes.
