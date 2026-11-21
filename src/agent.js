@@ -166,7 +166,7 @@ export async function build(plan, { robot, log, reset, feed }) {
       const p = robot.P(b.block)
       const off = Math.hypot(p[0] - dest[0], p[1] - dest[1]) * 1000
       const cup = r.cupN !== undefined ? ` · vacuum held ${r.cupN} of ${robot.cupN} N` : ''
-      if (off < 15 && Math.abs(p[2] - dest[2]) < 0.006) {
+      if (off < 7 && Math.abs(p[2] - dest[2]) < 0.006) {
         log('ok', `Measured the ${name}: ${(off * 5).toFixed(0)} mm off, right height${cup}${r.tries > 1 ? ` (grab worked on try ${r.tries})` : ''}`)
         break
       }
@@ -186,8 +186,9 @@ export function buildOrder(blocks) {
   return [...blocks].sort((p, q) => bottomOf(p) - bottomOf(q) || p.x - q.x || p.y - q.y)
 }
 
-// Is this box where the plan put it? (within 15 mm sideways and 6 mm in height)
-const inPlace = (b, robot) => { const p = robot.P(b.block); return Math.hypot(p[0] - b.x, p[1] - b.y) < 0.015 && Math.abs(p[2] - b.z) < 0.006 }
+// Is this box where the plan put it? Within 7 mm sideways (35 mm real: placing is about 5 mm off, the gap to a
+// neighbour 7.5 mm; a box pushed by a later one moved 45 mm and must be found) and 6 mm in height.
+const inPlace = (b, robot) => { const p = robot.P(b.block); return Math.hypot(p[0] - b.x, p[1] - b.y) < 0.007 && Math.abs(p[2] - b.z) < 0.006 }
 
 // Measure every box of a built pallet against the plan; pick up whatever moved and put it back, lowest first.
 export async function repair(plan, { robot, log }) {
