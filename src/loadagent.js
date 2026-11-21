@@ -23,14 +23,15 @@ order on a half-EUR pallet (60 x 80 cm). You never place boxes yourself: you cal
 - truck_test: the physics simulation pushes the stacked pallet like a truck does and measures how far boxes shift on
   the pallet. Pass if no box moves more than 5% of the load height. Profile "eu_test" = 0.5 g in every direction (the
   EU load-unit test, EUMOS 40509) — always run it. Profile "hard_braking" = 0.8 g forward and 0.5 g sideways (road
-  values of EN 12195-1) — run it when the trip has hard braking: long trips, motorways, city traffic, heavy goods.
+  values of EN 12195-1) — always run it too: every road trip can brake hard.
   wrapped=true tests the load with stretch film.
 - straps_needed: how many top-over straps keep the whole pallet from sliding or tipping on the truck floor (EN
   12195-1). Straps hold the pallet; they do not stop boxes shifting on the pallet — that is what the truck test and
   stretch wrap are for.
 - build_pallet: the robot builds the chosen plan, measures every box and repairs what moved; wrap=true wraps it after.
-Work like this: plan, test, and if a test fails decide what to change (another arrangement first; stretch wrap if
-arrangements keep failing; if nothing passes, say which boxes should go on a second pallet). Then straps, then build.
+Work like this: plan, run both tests, and if a test fails decide what to change (another arrangement first; stretch
+wrap if arrangements keep failing or if only hard braking fails — tall light boxes on top need it; if nothing passes,
+say which boxes should go on a second pallet). Then straps, then build — wrapped if the passing tests were wrapped.
 Use only results from tools; never invent numbers. Finish with a short message (3-5 sentences, plain English) for the
 warehouse worker and the manager: what was built, which tests passed with their numbers, wrap and straps, any warning.`
 
@@ -193,7 +194,7 @@ export async function runLoadAgent({ instructions = '', memoryText = '', ...deps
 // Without the AI: the same tools in a fixed order (plan, test, next plan or wrap, straps, build).
 async function fixedSteps(tools, state, { log }, instructions) {
   log('info', 'No AI: fixed steps with the same tools')
-  const hard = /motorway|highway|long|brak|city|traffic/i.test(instructions)
+  const hard = true // every road trip can brake hard (EN 12195-1: 0.8 g forward)
   const call = async (name, args) => { log('step', `⚙ ${describeCall(name, args)}`); return tools[name](args) }
   const skip = []
   let chosen = null, wrapIt = false

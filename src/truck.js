@@ -93,6 +93,8 @@ export function createTruckTest({ mujoco, model, data, scene, log }) {
       const named = (r) => r.replace(/\bb\d+ \(([^()]*(?:\([^()]*\))?)\)/g, '$1').replace(/\bb\d+\b/g, (id) => BLOCKS[id]?.name ?? id)
       if (broken.length) log('fail', `${g.name}: ${pass ? 'it did not move, but ' : ''}it breaks ${broken.length} warehouse rule${broken.length > 1 ? 's' : ''}: ${broken.map(named).join('; ')}${broken.some((r) => r.includes('fragile')) ? ' — the fragile boxes underneath are crushed' : ''}`)
       else log('ok', `${g.name}: warehouse rules OK as it stands`)
+      const wrapped = g.names.some((n) => { const e = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_EQUALITY.value, 'wrap_' + n); return e >= 0 && data.eq_active[e] })
+      if (!pass && run.accel > 0.5 && !wrapped && !broken.length) log('info', `${g.name}: hard braking needs stretch wrap (or a strap over the top) — press 🎞 Wrap and run it again`)
     }
     run = null
     return false
