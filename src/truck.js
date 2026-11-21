@@ -4,7 +4,7 @@
 // Inside the moving truck, a push at 0.5 g feels like gravity tilted sideways by half its strength,
 // so the test tilts MuJoCo's gravity for 0.6 s per push, then lets everything settle.
 import * as THREE from 'three'
-import { BLOCKS } from './planner.js'
+import { BLOCKS, checkRules } from './planner.js'
 import { PALLET, PALLET_B, copyId } from './pallet.js'
 
 const G = 9.81
@@ -77,9 +77,19 @@ export function createTruckTest({ mujoco, model, data, scene, log }) {
       const moved = g.names.map((n) => [n, Math.hypot(...P(n).map((v, k) => v - run.before[n][k]))])
       const [worstName, worst] = moved.reduce((a, b) => (b[1] > a[1] ? b : a))
       const pass = worst < limit
-      last.groups.push({ name: g.name, worst, worstName: nameOf(worstName), limit, pass })
+      // The shake only measures movement: stretch film can hold a bad stack still. So check the stack as it was loaded
+      // (before the pushes) against the warehouse rules too — a heavy box on a fragile one is crushed whether it moved or not.
+      const pal = g.name === 'LoadProof pallet' ? PALLET : PALLET_B
+      const original = (n) => (BLOCKS[n] ? n : 'b' + n.slice(1)) // the comparison pallet's copies, checked as the boxes they copy
+      const standing = { blocks: g.names.map((n) => { const p = run.before[n]; return { block: original(n), x: p[0], y: p[1] - pal.y + PALLET.y, z: p[2] } }).sort((a, b) => a.z - b.z) }
+      const broken = checkRules(standing).filter((r) => !r.includes('missing'))
+      last.groups.push({ name: g.name, worst, worstName: nameOf(worstName), limit, pass, broken })
       log(pass ? 'ok' : 'fail', `${g.name}: truck test ${pass ? 'PASSED' : 'FAILED'} — the ${nameOf(worstName)} moved ${(worst * 1000 * 5).toFixed(0)} mm ` +
         `(limit: 5% of ${(g.height * 100 * 5).toFixed(0)} cm = ${(limit * 1000 * 5).toFixed(0)} mm)`)
+      // "b5 rests on fragile b1 (CHIPS 2 kg (fragile))" -> "WATER 12 kg rests on fragile CHIPS 2 kg (fragile)"
+      const named = (r) => r.replace(/\bb\d+ \(([^()]*(?:\([^()]*\))?)\)/g, '$1').replace(/\bb\d+\b/g, (id) => BLOCKS[id]?.name ?? id)
+      if (broken.length) log('fail', `${g.name}: ${pass ? 'it did not move, but ' : ''}it breaks ${broken.length} warehouse rule${broken.length > 1 ? 's' : ''}: ${broken.map(named).join('; ')}${broken.some((r) => r.includes('fragile')) ? ' — the fragile boxes underneath are crushed' : ''}`)
+      else log('ok', `${g.name}: warehouse rules OK as it stands`)
     }
     run = null
     return false
