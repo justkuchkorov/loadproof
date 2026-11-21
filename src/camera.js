@@ -72,8 +72,10 @@ export function createCamera({ mujoco, model, data, area = { x: [0.14, 0.66], y:
     const t = Math.max(0, Math.min(1, z / 0.26))
     return [Math.round(20 + 235 * t), Math.round(40 + 170 * t * t), Math.round(90 + 80 * (1 - t))]
   }
+  let first = true
   function tick(rows = 4) {
     if (!ctx) return
+    if (first) { first = false; rows = nx } // the whole picture at once the first time, then a few rows a frame
     for (let r = 0; r < rows; r++, row = (row + 1) % nx) {
       const x = area.x[0] + row * VIEW_STEP
       for (let j = 0; j < ny; j++) {
