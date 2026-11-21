@@ -9,6 +9,7 @@ import { ARM, PALLET, PALLET_B, copyId, parkArm } from './pallet.js'
 const SPEED = 0.22 // pad speed while travelling, m/s in the model
 const ACC = 1.2 // speeding up and slowing down, m/s^2 (a UR's usual tool acceleration; same in the 1:5 model)
 const CLEAR = 0.018 // pad (or held box) passes at least this far above anything
+const PEDESTAL_R = 0.03 // the pedestal under the robot (pallet.js draws it with this radius)
 const KD = [0.4, 0.4, 0.25, 0.05, 0.05, 0.05] // joint damping of the motors, N m s/rad (model scale)
 // The vacuum cup, in real size (our gripper's assumed specification): 12 cm across, 0.6 bar of vacuum.
 // Holding force = vacuum x area = 60 kPa x pi x (6 cm)^2 = 679 N; with a safety factor of 2, 339 N may be used.
@@ -48,6 +49,9 @@ export function createArm({ mujoco, model, data, debug = () => {}, eye = null })
   const ff = KD.map((d, i) => d / -model.actuator_biasprm[10 * i + 1]) // damping / stiffness (s): feeding the joint speed forward removes the lag
 
   const parkQ = ARM.parkQ
+  const yawOf = (q) => { const R = ik.fk(q).R; return Math.atan2(R[1], R[0]) } // the cup's turn about the vertical
+  const wrapAngle = (a) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI))
+  const YAW_SIGN = Math.sign(wrapAngle(yawOf(parkQ.map((v, i) => (i === 5 ? v + 0.1 : v))) - yawOf(parkQ))) || 1 // which way the wrist turns the cup
   let goal = ARM.park.slice()
   let qT = parkQ.slice()
   let motion = null // { pts, i, t, seg }
@@ -95,6 +99,10 @@ export function createArm({ mujoco, model, data, debug = () => {}, eye = null })
     } else { vPrev = null; aF = null }
     const prev = qT
     const sol = ik.solve(goal, 0, qT, 8)
+    // Hold the cup's turn exactly, as a robot controller holds the tool's orientation: the solver weighs position
+    // first, so on a fast swing of the base the cup turned up to 50 degrees and a long box swept over its neighbours.
+    // The last wrist joint turns about the cup's own axis, so turning it by the error leaves the position as it is.
+    sol.q[5] -= YAW_SIGN * wrapAngle(yawOf(sol.q))
     qT = sol.q; ikErr = sol.err
     for (let i = 0; i < 6; i++) data.ctrl[i] = qT[i] - parkQ[i] + (dt > 0 ? ff[i] * (qT[i] - prev[i]) / dt : 0)
   }
@@ -173,10 +181,14 @@ export function createArm({ mujoco, model, data, debug = () => {}, eye = null })
     const around = (p) => { const [t, r] = polar(p); return [((t % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI), r] }
     const [ta, ra] = around(a), [tb, rb] = around(xyz)
     if (Math.abs(tb - ta) > 3.3) debug(`long way round: ${((tb - ta) * 180 / Math.PI).toFixed(0)} degrees`)
+    // Round the base no closer than the held box allows: its far corner must clear the pedestal (a long box held
+    // at its centre reaches 8.5 cm out; it scraped the pedestal, which twisted it into its neighbours).
+    const held = holding ? sizeOf(holding) : null
+    const rMin = held ? PEDESTAL_R + Math.hypot(held[0], held[1]) / 2 + 0.01 : 0.1
     const len = Math.abs(tb - ta) * Math.max(ra, rb) + Math.abs(rb - ra)
     const n = Math.max(2, Math.ceil(len / 0.01))
     const xy = Array.from({ length: n + 1 }, (_, i) => {
-      const t = ta + (tb - ta) * i / n, r = Math.max(0.1, ra + (rb - ra) * i / n)
+      const t = ta + (tb - ta) * i / n, r = Math.max(rMin, ra + (rb - ra) * i / n)
       return [bx + r * Math.cos(t), by + r * Math.sin(t)]
     })
     xy[0] = [a[0], a[1]]; xy[n] = [xyz[0], xyz[1]]
@@ -218,6 +230,7 @@ export function createArm({ mujoco, model, data, debug = () => {}, eye = null })
       const at = look(obj)
       if (!at) { debug(`camera: ${obj} not found near ${expectedAt(obj).map((v) => v.toFixed(3))}`); return { ok: false, tries, unseen: true } }
       const { p, top } = at
+      { const t = P(obj); debug(`${obj}: camera sees it at ${p.map((v) => v.toFixed(3))}, really at ${t.map((v) => v.toFixed(3))} (${(Math.hypot(p[0] - t[0], p[1] - t[1]) * 5000).toFixed(0)} mm real)`) }
       await moveTo([p[0], p[1], top + 0.02])
       await glide([p[0], p[1], top - 0.001], 0.35) // pad on the box top
       await wait(0.1)
@@ -253,7 +266,7 @@ export function createArm({ mujoco, model, data, debug = () => {}, eye = null })
     await glide(toward(0.004), 0.5)
     await settle(0.002, 1)
     await wait(0.15)
-    debug(`  lowered: box ${P(obj).map((v) => v.toFixed(3))}, dest ${dest.map((v) => v.toFixed(3))}`)
+    { const q = Q(body(obj)); debug(`  lowered: box ${P(obj).map((v) => v.toFixed(3))}, dest ${dest.map((v) => v.toFixed(3))}, yaw ${(Math.atan2(2 * (q[0] * q[3] + q[1] * q[2]), 1 - 2 * (q[2] * q[2] + q[3] * q[3])) * 180 / Math.PI).toFixed(1)} deg`) }
     unlock(obj) // vacuum off
     holding = null
     expected[obj] = [dest[0], dest[1]]
