@@ -17,7 +17,7 @@ for (const f of ['shadow_hand/hand_free.xml', ...fs.readdirSync(models + 'shadow
 const n = Number(process.argv[2] || 6)
 let passed = 0
 for (let k = 1; k <= n; k++) {
-  const labels = randomOrder()
+  const labels = process.env.ORDER ? process.env.ORDER.split(",") : randomOrder()
   const order = orderFrom(labels)
   setOrder(order)
   mujoco.FS.writeFile('/w/shadow_hand/scene.xml', sceneXml(order))
@@ -38,7 +38,7 @@ for (let k = 1; k <= n; k++) {
   const ok = !!plan
   if (ok) passed++
   console.log(`order ${k}: ${labels.join(',')} -> ${ok ? 'PASSED' : 'no safe plan'} in ${((Date.now() - t0) / 1000).toFixed(0)} s, tries ${lines.filter((l) => l.includes('planned "')).length}`)
-  if (!ok) console.log('   ' + lines.filter((l) => l.startsWith('fail')).slice(-2).join('\n   ').slice(0, 400))
+  if (!ok || process.env.ORDER) console.log('   ' + lines.filter((l) => !l.startsWith('step')).slice(-6).join('\n   ').slice(0, 1500))
   data.delete(); model.delete()
 }
 console.log(`${passed}/${n} random orders got a plan that passed every check`)

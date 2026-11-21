@@ -1,6 +1,7 @@
 // LoadProof's agent loop: plan -> warehouse rules -> it stands -> 0.5 g truck test -> (fix and retry) ->
 // build -> measure each box -> fix. Nothing is built until the plan has passed every check.
 import { design, toPositions, checkRules, checkPhysics, checkTransport, BLOCKS } from './planner.js'
+import { search } from './solver.js'
 
 const cm = (v) => (v * 100).toFixed(1)
 const mm = (v) => (v * 1000).toFixed(0)
@@ -44,7 +45,11 @@ export async function runAgent({ request, mujoco, model, robot, log, preview, re
   for (let attempt = 0; attempt < 3; attempt++) {
     log('step', attempt === 0 ? 'Asking the AI to plan the pallet…' : `Asking the AI to fix the plan (try ${attempt + 1} of 3)…`)
     const t0 = performance.now()
-    const r = await design(request, raw, feedback, attempt)
+    let r
+    try { r = await design(request, raw, feedback, attempt) } catch (err) {
+      log('fail', `The AI did not answer (${err.message}). Going on without it.`)
+      break
+    }
     raw = r.plan
     const { plan: placed, problems } = toPositions(raw)
     plan = placed
@@ -62,7 +67,46 @@ export async function runAgent({ request, mujoco, model, robot, log, preview, re
     preview(null)
     return plan
   }
-  log('fail', 'No stacking passed every check after 3 tries. Nothing was built.')
+  log('fail', 'The AI found no plan that passes every check in 3 tries.')
+
+  // Second opinion, no AI: search every arrangement of layers and spots.
+  log('step', 'Second opinion: searching every arrangement (no AI)…')
+  const { found, tried } = search({ maxLayers: 4, limit: 30 })
+  for (const raw of found) {
+    const { plan: p } = toPositions(raw)
+    if (!checkPhysics(mujoco, model, p).stands || !checkTransport(mujoco, model, p, 0.5).pass) continue
+    log('ok', `The search found a stacking that passes the rules, stands and passes the truck test (${found.length} of ${tried} arrangements pass the rules). Using it.`)
+    p.name = 'found by search'; p.say = 'A stacking found by searching every arrangement; it passed every check.'
+    const c = checkPlan(p, { mujoco, model, log, preview })
+    onChecked?.(p, c)
+    if (!c.pass) break
+    p.checks = c
+    if (place) { reset(); place(p); log('step', 'Placed the checked plan at once (robot build switched off)') }
+    else await build(p, { robot, log, reset, feed })
+    log('done', p.say)
+    preview(null)
+    return p
+  }
+  if (found.length === 0) {
+    log('fail', tried === 0
+      ? 'No safe stacking exists for this order on a half pallet: in 4 layers there is no way to give every box a full support with nothing on the fragile ones.'
+      : `No safe stacking exists for this order on a half pallet: all ${tried} ways to place every box break a warehouse rule.`)
+    // Which single box, moved to a second pallet, would make it work?
+    const entries = Object.entries(BLOCKS)
+    const helps = []
+    for (const [id, box] of entries) {
+      delete BLOCKS[id]
+      if (search({ maxLayers: 4, limit: 1 }).found.length) helps.push(box.name)
+      for (const k of Object.keys(BLOCKS)) delete BLOCKS[k]
+      for (const [k, v] of entries) BLOCKS[k] = v // restore, in the original order
+    }
+    log('info', helps.length
+      ? `💡 It works without one of these: ${[...new Set(helps)].join(', ')}. Move it to a second pallet, or remove it from the order.`
+      : '💡 Even without any single box it does not work. Split the order over two pallets.')
+  } else {
+    log('fail', `${found.length} arrangements pass the rules, but none of them passes the truck test unwrapped.`)
+  }
+  log('fail', 'Nothing was built.')
   // Last resort, as in a real warehouse: would stretch wrap make the best plan pass?
   if (plan && checkRules(plan).length === 0 && checkPhysics(mujoco, model, plan).stands) {
     const t = checkTransport(mujoco, model, plan, 0.5, { wrap: true })

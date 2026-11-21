@@ -101,7 +101,8 @@ async function main() {
   const spotsUsed = (list) => list.reduce((s, n) => s + (CATALOG[n].cm[0] > 40 || CATALOG[n].cm[1] > 50 ? 2 : 1), 0)
   function showDraft() {
     draftEl.innerHTML = draft.map((n, i) => `<button class="chip" data-i="${i}" title="remove">${n} ×</button>`).join('') +
-      `<span class="dim"> ${draft.length} boxes · ${spotsUsed(draft)} spots (4 per layer)</span>`
+      `<span class="dim"> ${draft.length} boxes · ${spotsUsed(draft)} spots (4 per layer)</span>` +
+      (spotsUsed(draft) % 4 ? `<span class="fragile"> · not a multiple of 4: one layer stays incomplete, which may make the order impossible</span>` : '')
     draftEl.querySelectorAll('[data-i]').forEach((el) => { el.onclick = () => { draft.splice(+el.dataset.i, 1); showDraft() } })
   }
   document.getElementById('catalog').innerHTML = Object.entries(CATALOG).map(([n, c]) =>
