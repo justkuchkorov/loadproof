@@ -38,10 +38,10 @@ later. He sleeps; the laptop stays plugged in with the lid OPEN (closing it slee
 
 ## Morning summary (written 02:15)
 
-All of 1-8 are built, tested and committed, one commit each (any one can be removed: ).
-Item 9 (whole truck) is NOT started: it waits for your yes.
+All of 1-8 are built, tested and committed, one commit each (any one can be removed with `git revert` and that
+commit's id from `git log`). Item 9 (whole truck) is NOT started: it waits for your yes.
 
-**Open the app:**  in this folder, then http://localhost:5173 (slides: /pitch/slides.html,
+**Open the app:** `npm run dev` in this folder, then http://localhost:5173 (slides: /pitch/slides.html,
 backup recording: /pitch/backup.html, both work offline).
 
 **Try each, in this order (about 5 minutes):**
