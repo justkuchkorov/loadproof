@@ -7,8 +7,7 @@ import { createGrasp, FIST } from './grasp.js'
 import { createRobot } from './robot.js'
 import { createArm, prepareArm } from './arm.js'
 import { createCamera } from './camera.js'
-import { createTakeover } from './takeover.js'
-import { checkPlan, repair } from './agent.js'
+import { checkPlan } from './agent.js'
 import { runLoadAgent, readOrder, quickPlan } from './loadagent.js'
 import { BLOCKS, setOrder } from './planner.js'
 import { ORDER, CATALOG, PALLET, PALLET_B, sceneXml, workersStack, orderFrom, randomOrder, copyId, wrapBoxes, setCell, armXml } from './pallet.js'
@@ -341,30 +340,6 @@ async function main() {
     log('ok', `🎞 Wrapped ${loads.filter((l) => l.length).length === 2 ? 'both loads' : 'the load'} in stretch film`)
   }
 
-  // Sabotage: shove one top box of the finished LoadProof pallet; the robot measures everything and repairs it.
-  document.getElementById('knock').onclick = async () => {
-    if (agentBusy || truck.running) return
-    const plan = lastGoodPlan
-    const onPallet = plan && plan.blocks.every((b) => Math.hypot(...robot.P(b.block).map((v, k) => v - [b.x, b.y, b.z][k])) < 0.02)
-    if (!onPallet) { log('fail', 'Knock: build a LoadProof pallet first'); return }
-    agentBusy = true
-    const tops = plan.blocks.filter((b) => !plan.blocks.some((o) => o !== b && o.z > b.z + 0.01 && Math.abs(o.x - b.x) < 0.05 && Math.abs(o.y - b.y) < 0.07))
-    const victim = tops[Math.floor(Math.random() * tops.length)]
-    const id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, victim.block)
-    const v = model.jnt_dofadr[model.body_jntadr[id]]
-    const out = Math.sign(victim.y - PALLET.y) || 1
-    const before = robot.P(victim.block)
-    data.qvel.set([0.05, 0.45 * out, 0.15, 0, 0, 0], v) // a shove sideways, off its spot
-    log('fail', `💥 Someone knocked the ${BLOCKS[victim.block].name}`)
-    await new Promise((res) => setTimeout(res, 1500))
-    if (unwrap) { // wrapped: the film holds the box, there is nothing to repair
-      const mm = Math.round(1000 * Math.hypot(...robot.P(victim.block).map((x, k) => x - before[k])))
-      log('ok', `🎞 The stretch film held it: the ${BLOCKS[victim.block].name} moved ${mm} mm. That is why loads are wrapped before the truck.`)
-    } else try { await repair(plan, { robot, log }) } catch (err) { log('fail', err.message === 'stopped' ? 'Stopped.' : 'Repair: ' + err.message) }
-    for (let k = 0; k < 3; k++) move[k] = data.mocap_pos[k]
-    agentBusy = false
-  }
-
   // The rushed worker's stack (arrival order, columns), placed at once, then checked in the computer.
   document.getElementById('worker').onclick = () => {
     if (agentBusy || truck.running) return
@@ -403,9 +378,7 @@ async function main() {
   window.addEventListener('keydown', (e) => {
     if (e.target === ask) return
     if (e.key === 'c' && lastHand) reach.calibrate(lastHand.image)
-    if (e.key === 'c' && takeover) takeover.recentre()
     if (e.key === 'r' && !agentBusy) reset()
-    if (e.key === 'r' && takeover) { takeButton.click(); reset() }
   })
 
   let tracker = null
@@ -426,31 +399,6 @@ async function main() {
     }
   }
 
-  // ✋ Take over: your hand steers the UR10e through the webcam (the manual backup to the agent).
-  let takeover = null
-  const takeButton = document.getElementById('takeover')
-  if (!ARM_CELL) takeButton.style.display = 'none'
-  takeButton.onclick = async () => {
-    if (takeover) { // hand control off: the robot parks
-      takeover = null; agentBusy = false; robot.steer(null); preview(null)
-      takeButton.textContent = '✋ Take over'
-      document.getElementById('camwrap').style.display = 'none'
-      robot.home().catch(() => {})
-      log('info', '✋ Takeover ended: the robot parks')
-      return
-    }
-    if (agentBusy || truck.running) { log('fail', '✋ Stop the agent first'); return }
-    takeButton.disabled = true
-    try {
-      if (!tracker) tracker = await createTracker(document.getElementById('cam'), document.getElementById('overlay'))
-      document.getElementById('camwrap').style.display = 'block'
-      agentBusy = true; robot.start()
-      takeover = createTakeover({ robot, log, preview })
-      takeButton.textContent = '✋ End takeover'
-      log('you', '✋ Takeover: your hand steers the robot. Hold your hand in the middle of the picture to start (C re-centres). Palm = where the cup goes; pinch thumb and index finger = vacuum on; open = put it down.')
-    } catch (err) { log('fail', '✋ Camera: ' + err.message) }
-    takeButton.disabled = false
-  }
   if (new URLSearchParams(location.search).has('autostart')) startButton.click()
   const auto = new URLSearchParams(location.search).get('build')
   if (auto) { ask.value = auto; startBuild() }
@@ -487,14 +435,9 @@ async function main() {
     if (ARM_CELL) {
       // The UR10e: its controller always runs (building, holding still, or parked during the truck test).
       if (truck.running) truck.tick(simDt)
-      let manual = null
-      if (takeover) { // a person steers the arm with their hand (webcam)
-        manual = takeover.update(hand)
-        ring.visible = !!manual.ring
-        if (manual.ring) { ring.position.x = manual.ring[0]; ring.position.y = manual.ring[1]; ring.material.color.set(manual.near ? 0x3fb950 : 0x8b949e) }
-      } else ring.visible = false
+      ring.visible = false
       if (simDt > 0) robot.tick(simDt)
-      const text = manual ? manual.text : truck.running ? '🚚 Truck test running…' : agentBusy ? 'The UR10e is building · press Stop to stop it' : `Ready · ${HELP}`
+      const text = truck.running ? '🚚 Truck test running…' : agentBusy ? 'The UR10e is building · press Stop to stop it' : `Ready · ${HELP}`
       if (status.textContent !== text) status.textContent = text
     } else if (truck.running) {
       // 2c. Truck test: hand parked high and open, gravity tilted by the test, slow motion during the pushes.

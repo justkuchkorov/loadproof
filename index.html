@@ -14,7 +14,7 @@
     #start:disabled { opacity: 0.6; cursor: default; }
     #rec { position: fixed; top: 12px; right: 150px; padding: 8px 14px; font: inherit; border: 0; border-radius: 6px; background: #30363d; color: #fff; cursor: pointer; }
     #rec.on { background: #da3633; }
-    #camwrap { display: none; position: fixed; right: 12px; bottom: 236px; width: 320px; height: 240px; border-radius: 8px; overflow: hidden; border: 1px solid #30363d; transform: scaleX(-1); }
+    #camwrap { display: none; position: fixed; right: 12px; bottom: 12px; width: 320px; height: 240px; border-radius: 8px; overflow: hidden; border: 1px solid #30363d; transform: scaleX(-1); }
     #camwrap video, #camwrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
     #agent { position: fixed; left: 12px; bottom: 12px; width: min(470px, calc(100vw - 24px)); background: #0d1117e6; border: 1px solid #30363d; border-radius: 8px; padding: 10px; box-sizing: border-box; }
     #agent .row { display: flex; gap: 6px; }
@@ -25,7 +25,6 @@
     #stop { background: #30363d; }
     #truck { background: #9e6a03; flex: 0 0 auto; white-space: nowrap; }
     #compare { background: #6639ba; flex: 1; }
-    #knock { background: #8e1519; flex: 1; }
     #wrap { background: #1b4b5a; flex: 0.8; }
     #report { background: #30363d; flex: 0.8; }
     .slider { margin-top: 6px; align-items: center; gap: 8px; font-size: 12px; }
@@ -84,7 +83,6 @@
     </div>
     <div class="row">
       <button id="worker" title="Stack the boxes the way a rushed worker would: in the order they arrived, in columns">👷 Rushed worker</button>
-      <button id="takeover" title="Steer the robot with your own hand through the webcam: the manual backup when a person must take over">✋ Take over</button>
       <button id="build" title="The agent reads the order, plans with the search, tests in physics (EU 0.5 g, hard braking 0.8 g), decides on wrap and straps, and has the robot build it">🤖 LoadProof: plan &amp; build</button>
     </div>
     <div class="row" style="margin-top: 6px">
@@ -94,7 +92,6 @@
     </div>
     <div class="row" style="margin-top: 6px">
       <button id="compare" title="Rushed stack on the right pallet, LoadProof plan on the left, same boxes, placed at once">⚖️ Compare</button>
-      <button id="knock" title="Shove one box of the finished LoadProof pallet; the robot measures every box and repairs it">💥 Knock a box</button>
       <button id="wrap" title="Wrap what stands on the pallets in stretch film (press again to unwrap)">🎞 Wrap</button>
       <button id="report" title="A printable load stability report for the last LoadProof plan">📄 Report</button>
     </div>

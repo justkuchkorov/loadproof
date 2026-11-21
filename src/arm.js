@@ -59,7 +59,6 @@ export function createArm({ mujoco, model, data, debug = () => {}, eye = null })
   // The force the cup must hold while carrying: the box's real mass times (its acceleration minus gravity), from its
   // measured velocity. Above CUP_N the seal breaks and the box drops.
   let carrying = false, vPrev = null, aF = null, cupPeak = 0, dropped = null
-  let manual = null // a point a person steers the pad to (takeover.js); followed when no planned motion runs
 
   // Called every frame: move the goal along the path, turn it into joint angles, send them to the motors.
   function tick(dt) {
@@ -80,10 +79,6 @@ export function createArm({ mujoco, model, data, debug = () => {}, eye = null })
           if (m.i >= m.pts.length - 1) { motion = null; m.resolve() }
         }
       }
-    }
-    if (!motion && manual) { // followed in a straight line at the normal speed
-      const d = manual.map((v, k) => v - goal[k]), dist = Math.hypot(...d)
-      if (dist > 1e-5) goal = goal.map((v, k) => v + d[k] * Math.min(1, SPEED * dt / dist))
     }
     waiters = waiters.filter((w) => (w.until <= time ? (w.resolve(), false) : true))
     if (holding && carrying && dt > 0) {
@@ -286,7 +281,6 @@ export function createArm({ mujoco, model, data, debug = () => {}, eye = null })
 
   return {
     tick, pickPlace, pick, place, clearAt, P, S, touching,
-    steer(p) { manual = p ? p.slice() : null }, // the takeover's target for the pad (null: stop following)
     get goal() { return goal.slice() },
     get holding() { return holding },
     payloadKg: 12.5, // UR10e datasheet (universal-robots.com)
@@ -298,7 +292,7 @@ export function createArm({ mujoco, model, data, debug = () => {}, eye = null })
     home: () => moveTo(ARM.park),
     park() { if (!motion) moveTo(ARM.park).catch(() => {}) },
     // Stop: let the waiting skill wake up; its next move then throws 'stopped', so the agent ends cleanly.
-    stop() { manual = null; stopped = true; const m = motion, w = waiters; motion = null; waiters = []; holding = null; carrying = false; releaseAll(); m?.resolve(); w.forEach((x) => x.resolve()) },
+    stop() { stopped = true; const m = motion, w = waiters; motion = null; waiters = []; holding = null; carrying = false; releaseAll(); m?.resolve(); w.forEach((x) => x.resolve()) },
     start() { stopped = false; goal = S() },
     // After mj_resetData the arm stands parked again (its motors hold the parked pose): match the controller to it.
     resetPose() { motion = null; waiters = []; holding = null; stopped = false; goal = ARM.park.slice(); qT = parkQ.slice(); for (const k of Object.keys(expected)) delete expected[k]; parkArm(mujoco, model, data) },
