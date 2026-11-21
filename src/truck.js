@@ -28,7 +28,8 @@ export function createTruckTest({ mujoco, model, data, scene, log }) {
   arrow.visible = false
   scene.add(arrow)
 
-  let run = null // { t, step, before, names, height, accel }
+  let run = null // { t, step, before, groups, accel }
+  let last = null // the last finished test, for the report
 
   // Every box name, copies included (a copy exists for every box of the order).
   const allNames = () => Object.keys(BLOCKS).flatMap((n) => [n, copyId(n)])
@@ -65,11 +66,13 @@ export function createTruckTest({ mujoco, model, data, scene, log }) {
     // Done: how far did each box end up from where it started? One verdict per pallet.
     model.opt.gravity.set(normal)
     arrow.visible = false
+    last = { accel: run.accel, groups: [] }
     for (const g of run.groups) {
       const limit = Math.max(0.05 * g.height, 0.002)
       const moved = g.names.map((n) => [n, Math.hypot(...P(n).map((v, k) => v - run.before[n][k]))])
       const [worstName, worst] = moved.reduce((a, b) => (b[1] > a[1] ? b : a))
       const pass = worst < limit
+      last.groups.push({ name: g.name, worst, worstName: nameOf(worstName), limit, pass })
       log(pass ? 'ok' : 'fail', `${g.name}: truck test ${pass ? 'PASSED' : 'FAILED'} — the ${nameOf(worstName)} moved ${(worst * 1000).toFixed(0)} mm ` +
         `(limit: 5% of ${(g.height * 100).toFixed(1)} cm = ${(limit * 1000).toFixed(0)} mm)`)
     }
@@ -80,6 +83,8 @@ export function createTruckTest({ mujoco, model, data, scene, log }) {
   return {
     start, tick,
     get running() { return !!run },
+    get last() { return last },
+    forget() { last = null },
     get timeScale() { return run && run.step >= 0 ? SLOW : 1 },
     // What is happening now, for the banner and the shake: null, or { name, accel, pushing }
     get phase() { return run && run.step >= 0 ? { name: PUSHES[run.step]?.name, accel: run.accel, pushing: run.t < PUSH_TIME, dir: PUSHES[run.step]?.dir } : null },

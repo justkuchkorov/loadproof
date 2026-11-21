@@ -10,6 +10,7 @@ import { BLOCKS, setOrder } from './planner.js'
 import { ORDER, CATALOG, PALLET, PALLET_B, sceneXml, workersStack, orderFrom, randomOrder, copyId, wrapBoxes } from './pallet.js'
 import { createTruckTest } from './truck.js'
 import * as memory from './memory.js'
+import { openReport } from './report.js'
 
 const status = document.getElementById('status')
 const startButton = document.getElementById('start')
@@ -168,7 +169,7 @@ async function main() {
     try {
       const useRobot = document.getElementById('userobot').checked
       const plan = await runAgent({ request: request + memory.promptText(labelsOfOrder), mujoco, model, robot, log, preview, reset, place: useRobot ? null : place, onChecked: remember('AI') })
-      if (plan) lastGoodPlan = plan
+      if (plan) { lastGoodPlan = plan; truck.forget() }
     } catch (err) {
       log('fail', err.message === 'stopped' ? 'Stopped. Your hand is in charge again.' : 'Error: ' + err.message)
       console.error(err)
@@ -215,6 +216,13 @@ async function main() {
       log('fail', 'Compare: ' + err.message)
     }
     agentBusy = false
+  }
+
+  // The load stability report for the last LoadProof plan (and the last truck test, if one ran after it).
+  document.getElementById('report').onclick = () => {
+    if (!lastGoodPlan?.checks) { log('fail', '📄 Report: run LoadProof first'); return }
+    const opened = openReport({ order, plan: lastGoodPlan, checks: lastGoodPlan.checks, truck: truck.last, orderName: demo ? 'order #A-1042' : 'custom order' })
+    if (!opened) log('fail', '📄 The browser blocked the report window: allow pop-ups for this page')
   }
 
   // Stretch wrap: hold each load on its pallet with soft film; a see-through film is drawn around each load.

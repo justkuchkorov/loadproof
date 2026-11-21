@@ -34,7 +34,7 @@ export function checkPlan(plan, { mujoco, model, log, preview }, extra = [], { a
   }
   log('ok', `🚚 Truck test 0.5 g (EUMOS 40509 style) PASSED: worst ${mm(Math.max(...t.results.map((r) => r.worst)))} mm, limit ${mm(t.limit)} mm. ${lines}`)
   preview(plan, 'good')
-  return { pass: true }
+  return { pass: true, transport: t }
 }
 
 export async function runAgent({ request, mujoco, model, robot, log, preview, reset, feed, place, onChecked }) {
@@ -55,6 +55,7 @@ export async function runAgent({ request, mujoco, model, robot, log, preview, re
     const c = checkPlan(plan, { mujoco, model, log, preview }, problems)
     onChecked?.(plan, c)
     if (!c.pass) { feedback = c.feedback; continue }
+    plan.checks = c
     if (place) { reset(); place(plan); log('step', 'Placed the checked plan at once (robot build switched off)') }
     else await build(plan, { robot, log, reset, feed })
     log('done', plan.say)
