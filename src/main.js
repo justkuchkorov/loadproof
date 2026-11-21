@@ -8,7 +8,7 @@ import { createRobot } from './robot.js'
 import { createArm, prepareArm } from './arm.js'
 import { createCamera } from './camera.js'
 import { createWorker } from './worker.js'
-import { checkPlan } from './agent.js'
+import { checkPlan, buildOrder } from './agent.js'
 import { runLoadAgent, readOrder, quickPlan } from './loadagent.js'
 import { BLOCKS, setOrder } from './planner.js'
 import { ORDER, CATALOG, PALLET, PALLET_B, sceneXml, workersStack, orderFrom, randomOrder, copyId, wrapBoxes, setCell, armXml } from './pallet.js'
@@ -33,8 +33,15 @@ async function main() {
   // The order: from the address (#order=WATER,CHIPS,...) or the demo order #A-1042.
   const fromHash = new URLSearchParams(location.hash.slice(1)).get('order')
   const labelsInHash = fromHash ? fromHash.split(',').filter((n) => CATALOG[n]) : []
-  const demo = labelsInHash.length === 0
-  const order = demo ? ORDER : orderFrom(labelsInHash)
+  // #boxes: the boxes registered on boxes.html (phone or laptop), at most 9 on one half pallet
+  let myBoxes = null
+  if (new URLSearchParams(location.hash.slice(1)).has('boxes')) {
+    try { myBoxes = (await (await fetch('/__boxes')).json()).boxes.slice(0, 9) } catch { myBoxes = null }
+    if (!myBoxes?.length) myBoxes = null
+  }
+  const demo = labelsInHash.length === 0 && !myBoxes
+  const order = myBoxes ? myBoxes.map((b, i) => ({ id: `b${i + 1}`, label: b.name, kg: b.kg, fragile: b.firmness === 'soft', firmness: b.firmness, cm: b.cm, num: b.n }))
+    : demo ? ORDER : orderFrom(labelsInHash)
   setOrder(order)
   const labels = Object.fromEntries(order.flatMap((b) => [[b.id, { title: b.label, kg: b.kg, fragile: b.fragile }], [copyId(b.id), { title: b.label, kg: b.kg, fragile: b.fragile }]]))
   const sim = await createSim(document.getElementById('view'), { xml: sceneXml(order), labels, arm: ARM_CELL, armXml, prepare: prepareArm })
@@ -114,12 +121,12 @@ async function main() {
   }
 
   // The order, shown in the panel.
-  document.getElementById('ordername').textContent = demo ? 'order #A-1042 (demo)' : `custom order · ${order.length} boxes`
+  document.getElementById('ordername').textContent = demo ? 'order #A-1042 (demo)' : myBoxes ? `your boxes · ${order.length}` : `custom order · ${order.length} boxes`
   document.getElementById('order').innerHTML = order.map((b) =>
     `<li><b>${b.label}</b> ${b.kg} kg${b.fragile ? ' <span class="fragile">FRAGILE</span>' : ''} <span class="dim">${b.cm.join('×')} cm</span></li>`).join('')
 
   // The order editor: add or remove boxes, or roll a random order; "Load" rebuilds the scene with it.
-  let draft = order.map((b) => b.label)
+  let draft = order.map((b) => b.label).filter((n) => CATALOG[n]) // your own boxes (boxes.html) are not in the catalogue
   const draftEl = document.getElementById('draft')
   const spotsUsed = (list) => list.reduce((s, n) => s + (CATALOG[n].cm[0] > 40 || CATALOG[n].cm[1] > 50 ? 2 : 1), 0)
   function showDraft() {
@@ -230,7 +237,7 @@ async function main() {
       } else log('you', 'LoadProof: plan, test, secure and build this order')
       const useRobot = document.getElementById('userobot').checked
       const state = await runLoadAgent({ instructions, mujoco, model, robot, log, preview, reset, place: useRobot ? null : place, wrap: wrapLoad, onChecked: remember('AI') })
-      if (state?.builtPlan) { lastGoodPlan = state.builtPlan; truck.forget() }
+      if (state?.builtPlan) { lastGoodPlan = state.builtPlan; truck.forget(); postSheet(state.builtPlan) }
     } catch (err) {
       log('fail', err.message === 'stopped' ? 'Stopped. Your hand is in charge again.' : 'Error: ' + err.message)
       console.error(err)
@@ -240,6 +247,15 @@ async function main() {
     buildButton.disabled = false
   }
   buildButton.onclick = startBuild
+
+  // The loading sheet for a person (and the phone and box pages): which box goes where, step by step, then wrap and straps.
+  function postSheet(plan) {
+    const byId = Object.fromEntries(order.map((b) => [b.id, b]))
+    const steps = buildOrder(plan.blocks).map((b, i) => ({ step: i + 1, n: byId[b.block]?.num ?? null, name: BLOCKS[b.block].name, layer: b.layer, spot: b.spot }))
+    const a = plan.agent
+    const after = [a?.wrapped ? '🎞 Wrap the load in stretch film.' : null, a?.straps ? `🪢 ${a.straps.straps} top-over strap${a.straps.straps > 1 ? 's' : ''} on the truck (EN 12195-1).` : null].filter(Boolean)
+    fetch('/__sheet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: `${document.getElementById('ordername').textContent} — ${steps.length} boxes, tested in the truck simulation`, steps, after, at: new Date().toISOString() }) }).catch(() => {})
+  }
 
   // Signs over the two pallets, shown in Compare.
   function sign(text, color, y) {
@@ -450,6 +466,7 @@ async function main() {
       else if (c.cmd === 'truck') { gSlider.value = String(c.g ?? 0.5); gSlider.oninput(); truckButton.onclick() }
       else if (c.cmd === 'wrap') document.getElementById('wrap').onclick()
       else if (c.cmd === 'stop') robot.stop()
+      else if (c.cmd === 'loadboxes') { location.hash = 'boxes'; location.reload() }
     })
     setInterval(() => {
       if (performance.now() - remoteSeen > 10000) return // no phone connected
@@ -462,7 +479,7 @@ async function main() {
     }, 400)
     fetch('/__remote-url').then((r) => r.json()).then(({ urls }) => {
       const el = document.getElementById('remoteurl')
-      if (el && urls.length) el.innerHTML = '📱 Phone remote (same Wi-Fi): ' + urls.map((u) => `<b>${u}</b>`).join(' or ')
+      if (el && urls.length) el.innerHTML = '📱 Phone remote (same Wi-Fi): ' + urls.map((u) => `<b>${u}</b>`).join(' or ') + ' · <a href="/boxes.html" target="_blank" style="color:#58a6ff">📦 Boxes</a>'
     }).catch(() => {})
   }
   if (new URLSearchParams(location.search).has('autostart')) startButton.click()

@@ -1,6 +1,7 @@
 // A one-page load stability report for a checked plan, opened in a new window, ready to print or save as PDF.
 import { BLOCKS } from './planner.js'
 import { PALLET } from './pallet.js'
+import { buildOrder } from './agent.js'
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 const mm = (m) => (m * 1000 * 5).toFixed(0) // model metres -> real millimetres (the model is 1:5)
@@ -44,6 +45,8 @@ export function reportHtml({ order, plan, checks, truck, orderName }) {
 ${order.map((b) => `<tr><td>${esc(b.label)}</td><td>${b.kg} kg</td><td>${b.cm.join(' × ')}</td><td>${b.fragile ? '<span class="bad">FRAGILE</span>' : ''}</td></tr>`).join('')}</table>
 <h2>Stacking plan (top view, near side at the bottom)</h2>
 <div class="layers">${layers.map((L, i) => `<figure>${layerSvg(plan.blocks.filter((b) => (b.layer ?? Math.round(b.z * 100)) === L))}<figcaption>Layer ${i + 1}: ${plan.blocks.filter((b) => (b.layer ?? Math.round(b.z * 100)) === L).map((b) => esc(BLOCKS[b.block].name)).join(', ')}</figcaption></figure>`).join('')}</div>
+<h2>Loading sheet (for a person, or the robot's build order)</h2>
+<table><tr><th>Step</th><th>Box</th><th>Where</th></tr>${buildOrder(plan.blocks).map((b, i) => { const o = order.find((x) => x.id === b.block); return `<tr><td>${i + 1}</td><td>${o?.num ? `<b>#${o.num}</b> ` : ''}${esc(BLOCKS[b.block].name)}</td><td>layer ${b.layer ?? '?'}, ${esc(b.spot ?? '')}</td></tr>` }).join('')}</table>
 <h2>Checks before building</h2>
 <table>
 <tr><td>Warehouse rules (on the pallet, 70% support, nothing heavy on much lighter, nothing on fragile)</td><td class="ok">PASS</td></tr>

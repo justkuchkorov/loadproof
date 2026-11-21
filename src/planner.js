@@ -9,7 +9,8 @@ const MODELS = ['gemini-3.5-flash-lite', 'gemini-3.8-flash'] // fast first; the 
 export const BLOCKS = {}
 export function setOrder(order) {
   for (const k of Object.keys(BLOCKS)) delete BLOCKS[k]
-  for (const b of order) BLOCKS[b.id] = { size: size(b), name: `${b.label} ${b.kg} kg${b.fragile ? ' (fragile)' : ''}`, kg: b.kg, fragile: b.fragile, kind: kind(b) }
+  // limit: how much heavier a box on top may be (1.5 times; 'mid' boxes from boxes.html only carry lighter ones)
+  for (const b of order) BLOCKS[b.id] = { size: size(b), name: `${b.label} ${b.kg} kg${b.fragile ? ' (fragile)' : ''}`, kg: b.kg, fragile: b.fragile, kind: kind(b), limit: b.firmness === 'mid' ? 1 : 1.5 }
 }
 setOrder(ORDER)
 
@@ -158,7 +159,7 @@ export function checkRules(plan) {
       if (supported < 0.7) problems.push(`${b.block} (${box.name}) is only ${Math.round(supported * 100)}% supported, needs 70%`)
       for (const p of under) {
         if (BLOCKS[p.block].fragile) problems.push(`${b.block} rests on fragile ${p.block} (${BLOCKS[p.block].name})`)
-        else if (box.kg > 1.5 * BLOCKS[p.block].kg) problems.push(`heavy ${b.block} (${box.name}) rests on much lighter ${p.block} (${BLOCKS[p.block].name})`)
+        else if (box.kg > (BLOCKS[p.block].limit ?? 1.5) * BLOCKS[p.block].kg) problems.push(`heavy ${b.block} (${box.name}) rests on ${BLOCKS[p.block].limit === 1 ? 'lighter' : 'much lighter'} ${p.block} (${BLOCKS[p.block].name})`)
       }
     }
     placed.push(b)

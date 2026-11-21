@@ -56,6 +56,26 @@ function render() {
   put($('log'), s.log.map(([k, t]) => `<div class="${k}">${t.replace(/</g, '&lt;')}</div>`).join(''))
 }
 
+// The loading sheet (from the laptop's server): steps with tick boxes, kept on this phone.
+let sheetAt = null
+const ticked = () => { try { return JSON.parse(localStorage.getItem('loadproof.ticks') ?? '{}') } catch { return {} } }
+async function loadSheet() {
+  const sh = await (await fetch('/__sheet')).json().catch(() => null)
+  if (!sh) return
+  if (sh.at !== sheetAt) { sheetAt = sh.at; try { localStorage.setItem('loadproof.ticks', '{}') } catch { /* private window */ } }
+  const t = ticked()
+  $('sheet').innerHTML = `<div style="margin-bottom:6px"><b>${sh.title.replace(/</g, '&lt;')}</b></div>` + sh.steps.map((s) =>
+    `<label class="${t[s.step] ? 'done' : ''}"><input type="checkbox" data-step="${s.step}"${t[s.step] ? ' checked' : ''}> ${s.step}. ${s.n ? `<b>#${s.n}</b> ` : ''}${s.name.replace(/</g, '&lt;')} → layer ${s.layer}, <b>${s.spot}</b></label>`).join('') +
+    (sh.after ?? []).map((a) => `<div style="padding-top:6px">${a}</div>`).join('')
+  $('sheet').querySelectorAll('[data-step]').forEach((el) => { el.onchange = () => {
+    const t2 = ticked(); t2[el.dataset.step] = el.checked
+    try { localStorage.setItem('loadproof.ticks', JSON.stringify(t2)) } catch { /* private window */ }
+    el.parentElement.className = el.checked ? 'done' : ''
+  } })
+}
+import.meta.hot?.on('boxes:changed', loadSheet)
+loadSheet()
+
 import.meta.hot?.on('remote:state', (s) => { state = s; lastState = performance.now(); render() })
 setInterval(() => { send('hello'); render() }, 1500) // tells the page a phone is here; shows when the link is lost
 send('hello')

@@ -36,10 +36,12 @@
     .log div { padding: 2px 0; } .log .ok { color: #7ee787; } .log .fail { color: #ff9b94; } .log .done { color: var(--green); font-weight: 600; }
     .hidden { display: none; }
     .hint { color: var(--dim); font-size: 13px; }
+    #sheet label { display: flex; gap: 10px; align-items: center; padding: 7px 0; font-size: 15px; color: var(--text); border-bottom: 1px solid var(--line); }
+    #sheet input { width: 22px; height: 22px; } #sheet .done { color: var(--dim); text-decoration: line-through; }
   </style>
 </head>
 <body>
-  <h1><span id="dot" class="dot"></span> LoadProof remote</h1>
+  <h1><span id="dot" class="dot"></span> LoadProof remote <a href="/boxes.html" style="margin-left:auto; font-size:14px; color:#58a6ff">📦 Boxes</a></h1>
   <div id="status" class="status">Connecting to the LoadProof page on the laptop…</div>
 
   <div class="row">
@@ -63,6 +65,9 @@
       <button id="place" class="green hidden" style="width: 100%">Place it here</button>
     </div>
   </div>
+
+  <h2>📋 Loading sheet <span class="hint">(tick each step as you load)</span></h2>
+  <div id="sheet" class="log">No sheet yet: press 🤖 AI builds (with "robot builds it" off on the laptop, a person loads by this sheet).</div>
 
   <h2>Log</h2>
   <div id="log" class="log"></div>
