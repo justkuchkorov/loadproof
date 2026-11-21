@@ -5,7 +5,7 @@ An AI loading agent for warehouses: it plans how to stack a pallet, proves the p
 before a single box is touched, decides how to secure it, and then a person (with a step-by-step loading sheet on the
 phone) or a robot cell builds it.
 
-Team **Baxtiyor** (Abdurakhmon, Alyor) · GDG on Campus Debrecen — Agentic AI Hackathon, 21 November 2026.
+Team **Eustathia** (Abdurakhmon K., Alyor M.) · GDG on Campus Debrecen — Agentic AI Hackathon, 21 November 2026.
 
 **▶ Demo video (1:42):** [pitch/loadproof-demo.mp4](pitch/loadproof-demo.mp4) — the agent plans and tests, the robot
 builds with its 3D camera, then the truck test: the rushed pallet falls, LoadProof's holds. **Deck (PDF):**
