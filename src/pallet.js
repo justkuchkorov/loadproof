@@ -53,7 +53,9 @@ export function randomOrder(rand = Math.random) {
     let below = Infinity // lightest box of the layer below: nothing may be more than 1.5 times heavier
     for (let L = 0; L < layers && ok; L++) {
       const top = L === layers - 1
-      const shape = pick(LAYERS)
+      // Layer 1 holds a wide box (60 cm deep): it ties the near and far rows together; without it the rows are thin
+      // walls that tip over when the truck brakes. Layer 2 crosses it with long boxes when there are 3 layers.
+      const shape = L === 0 ? pick(LAYERS.filter((s) => s.includes('wide'))) : L === 1 && !top ? pick(LAYERS.filter((s) => s.includes('long'))) : pick(LAYERS)
       const layer = []
       for (const kind of shape) {
         const options = Object.keys(CATALOG).filter((n) => footprint(n) === kind && (top || !CATALOG[n].fragile) && CATALOG[n].kg <= 1.5 * below)
