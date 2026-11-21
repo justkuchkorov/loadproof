@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LoadProof — backup demo</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0f1720; color: #e6edf3; font: 15px system-ui, sans-serif; }
+  img { display: block; width: 100vw; height: calc(100vh - 34px); object-fit: contain; background: #0f1720; }
+  .bar { height: 34px; display: flex; align-items: center; gap: 12px; padding: 0 12px; color: #8b949e; }
+  input { flex: 1; }
+</style>
+</head>
+<body>
+<img id="f" alt="LoadProof demo frame">
+<div class="bar"><span>Backup recording of the live demo · space = pause · ← → = step</span><input type="range" id="seek" min="1" value="1"><span id="t"></span></div>
+<script>
+  // Frames captured by tests/capture_backup.mjs (Compare, then the truck test), played at 10 frames a second.
+  let count = 0, i = 1, playing = true
+  const img = document.getElementById('f'), seek = document.getElementById('seek'), t = document.getElementById('t')
+  const src = (k) => `backup/f${String(k).padStart(4, '0')}.jpg`
+  const show = (k) => { i = Math.max(1, Math.min(count, k)); img.src = src(i); seek.value = i; t.textContent = `${i} / ${count}` }
+  fetch('backup/frames.json').then((r) => r.json()).then((d) => {
+    count = d.count; seek.max = count; show(1)
+    for (let k = 1; k <= count; k++) { const im = new Image(); im.src = src(k) } // preload
+    setInterval(() => { if (playing) show(i >= count ? 1 : i + 1) }, 100)
+  })
+  addEventListener('keydown', (e) => { if (e.key === ' ') playing = !playing; if (e.key === 'ArrowRight') show(i + 1); if (e.key === 'ArrowLeft') show(i - 1) })
+  seek.oninput = () => show(Number(seek.value))
+</script>
+</body>
+</html>

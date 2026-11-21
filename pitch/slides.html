@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LoadProof</title>
+<style>
+  :root { --bg: #0f1720; --fg: #e6edf3; --dim: #8b949e; --blue: #58a6ff; --green: #3fb950; --red: #f85149; --amber: #d29922; --card: #161b22; --line: #30363d; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 22px/1.4 system-ui, sans-serif; overflow: hidden; }
+  .slide { position: absolute; inset: 0; padding: 7vh 8vw; display: none; flex-direction: column; justify-content: center; }
+  .slide.on { display: flex; }
+  h1 { font-size: 3.4em; margin: 0; letter-spacing: -1px; }
+  h2 { font-size: 1.9em; margin: 0 0 0.6em; }
+  .big { font-size: 2.3em; font-weight: 700; line-height: 1.2; }
+  .dim { color: var(--dim); }
+  .sub { font-size: 1.3em; margin-top: 0.4em; }
+  .row { display: flex; gap: 1.2em; align-items: stretch; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 0.8em 1em; flex: 1; }
+  .card b { display: block; font-size: 1.1em; margin-bottom: 0.2em; }
+  .arrow { align-self: center; color: var(--dim); font-size: 1.6em; }
+  .num { font-size: 2em; font-weight: 800; }
+  .g { color: var(--green); } .r { color: var(--red); } .a { color: var(--amber); } .b { color: var(--blue); }
+  .src { position: absolute; bottom: 4vh; left: 8vw; right: 8vw; font-size: 0.6em; color: var(--dim); }
+  .nav { position: fixed; bottom: 2vh; right: 2vw; font-size: 0.6em; color: var(--dim); }
+  ul { margin: 0.3em 0; padding-left: 1.1em; } li { margin: 0.25em 0; }
+</style>
+</head>
+<body>
+
+<section class="slide on">
+  <div class="dim">GDG on Campus Debrecen · Agentic AI Hackathon · 21 Nov 2026</div>
+  <h1>🚚 LoadProof</h1>
+  <div class="sub">Know your pallet survives the truck — <b>before</b> you stack it.</div>
+  <div class="dim" style="margin-top:2em">An AI plans the pallet · physics tests it at 0.5 g · a robot builds only what passed</div>
+</section>
+
+<section class="slide">
+  <div class="big">Up to <span class="r">25%</span> of truck accidents are linked to badly secured cargo.</div>
+  <div class="row" style="margin-top:1.6em">
+    <div class="card"><b>Stacking today</b>Mixed boxes are still mostly stacked by hand.</div>
+    <div class="card"><b>Testing today</b>EU test EUMOS 40509: push the finished pallet at <b class="a" style="display:inline">0.5 g</b> on a lab sled; it may shift at most 5% of its height.</div>
+    <div class="card"><b>The gap</b>Nobody tests the <i>plan</i> before the boxes are stacked.</div>
+  </div>
+  <div class="src">European Commission, road safety: cargo securing · MMH, "Solving the mixed case pallet puzzle" · Lansmont: EUMOS 40509</div>
+</section>
+
+<section class="slide">
+  <h2>How LoadProof works</h2>
+  <div class="row">
+    <div class="card"><b>📦 Order</b>any boxes — or a random one</div>
+    <div class="arrow">→</div>
+    <div class="card"><b>🤖 AI plans</b>Gemini, 3 answers in parallel, best kept; lessons from past failures</div>
+    <div class="arrow">→</div>
+    <div class="card"><b>✅ 3 checks</b>warehouse rules · stands · <span class="a">0.5 g truck test</span> in MuJoCo physics</div>
+    <div class="arrow">→</div>
+    <div class="card"><b>🦾 Robot builds</b>measures every box, fixes what moved</div>
+  </div>
+  <div class="dim" style="margin-top:1.2em">✗ a failed check goes back to the AI with the numbers · nothing is built until the plan passes · a person can take over the hand with a webcam</div>
+</section>
+
+<section class="slide">
+  <h2>Results (our tests)</h2>
+  <div class="row">
+    <div class="card"><div class="num r">0.3 g</div>rushed stack (arrival order) already fails — at 0.5 g a box flies 1.3 m</div>
+    <div class="card"><div class="num g">1 mm</div>LoadProof plan at 0.5 g — same boxes, same height</div>
+    <div class="card"><div class="num b">6 / 6</div>random orders got a passing plan on the first try, in 1–4 s</div>
+    <div class="card"><div class="num g">4 / 4</div>knocked boxes found and put back by the robot</div>
+  </div>
+  <div style="margin-top:1.2em"><b>Honest limits:</b> <span class="dim">1:5 simulation · assisted grip (like a suction gripper) · a planning check, not a certification.</span></div>
+  <div><b>Next:</b> <span class="dim">whole trucks · a real robot cell · the 0.8 g braking case (EN 12195-1) with straps.</span></div>
+</section>
+
+<div class="nav">← → or click · <span id="n"></span></div>
+<script>
+  const slides = [...document.querySelectorAll('.slide')]
+  let i = 0
+  const show = (k) => { i = Math.max(0, Math.min(slides.length - 1, k)); slides.forEach((s, j) => s.classList.toggle('on', j === i)); document.getElementById('n').textContent = `${i + 1} / ${slides.length}` }
+  addEventListener('keydown', (e) => { if (['ArrowRight', ' ', 'PageDown'].includes(e.key)) show(i + 1); if (['ArrowLeft', 'PageUp'].includes(e.key)) show(i - 1); if (e.key === 'f') document.documentElement.requestFullscreen?.() })
+  addEventListener('click', () => show(i + 1))
+  show(new URLSearchParams(location.search).get('s') - 1 || 0)
+</script>
+</body>
+</html>

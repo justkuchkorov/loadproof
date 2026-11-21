@@ -218,6 +218,36 @@ async function main() {
     agentBusy = false
   }
 
+  // Record this tab as a video, with the browser's own screen recorder (no extra program): the backup for the pitch.
+  const recButton = document.getElementById('rec')
+  let recorder = null
+  recButton.onclick = async () => {
+    if (recorder) { recorder.stop(); return }
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: false, preferCurrentTab: true })
+      const chunks = []
+      recorder = new MediaRecorder(stream, { mimeType: 'video/webm' })
+      recorder.ondataavailable = (e) => chunks.push(e.data)
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop())
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(new Blob(chunks, { type: 'video/webm' }))
+        a.download = 'loadproof-demo.webm'
+        a.click()
+        recorder = null
+        recButton.textContent = '⏺ Record'
+        recButton.classList.remove('on')
+      }
+      stream.getVideoTracks()[0].onended = () => recorder?.stop() // stopped from the browser bar
+      recorder.start()
+      recButton.textContent = '⏹ Stop & save'
+      recButton.classList.add('on')
+    } catch (err) {
+      recorder = null
+      log('fail', 'Recording: ' + err.message)
+    }
+  }
+
   // The load stability report for the last LoadProof plan (and the last truck test, if one ran after it).
   document.getElementById('report').onclick = () => {
     if (!lastGoodPlan?.checks) { log('fail', '📄 Report: run LoadProof first'); return }
@@ -376,6 +406,7 @@ async function main() {
       for (let k = 0; k < 3; k++) { move[k] += 0.15 * (safe[k] - move[k]); data.mocap_pos[k] = move[k] }
       for (let i = 0; i < model.nu; i++) data.ctrl[i] = 0
       ring.visible = false
+      status.textContent = `Ready · ${HELP}`
     } else {
       parked = false
       // 2b. Shared control: you choose where and when, the robot does the precise part.

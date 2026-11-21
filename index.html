@@ -10,6 +10,8 @@
     #status { position: fixed; top: 12px; left: 12px; padding: 6px 10px; background: #0008; border-radius: 6px; }
     #start { position: fixed; top: 12px; right: 12px; padding: 8px 14px; font: inherit; border: 0; border-radius: 6px; background: #238636; color: #fff; cursor: pointer; }
     #start:disabled { opacity: 0.6; cursor: default; }
+    #rec { position: fixed; top: 12px; right: 150px; padding: 8px 14px; font: inherit; border: 0; border-radius: 6px; background: #30363d; color: #fff; cursor: pointer; }
+    #rec.on { background: #da3633; }
     #camwrap { display: none; position: fixed; right: 12px; bottom: 12px; width: 320px; height: 240px; border-radius: 8px; overflow: hidden; border: 1px solid #30363d; transform: scaleX(-1); }
     #camwrap video, #camwrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
     #agent { position: fixed; left: 12px; bottom: 12px; width: min(470px, calc(100vw - 24px)); background: #0d1117e6; border: 1px solid #30363d; border-radius: 8px; padding: 10px; box-sizing: border-box; }
@@ -63,6 +65,7 @@
   <div id="view"></div>
   <div id="status">Loading MuJoCo…</div>
   <button id="start">Start camera</button>
+  <button id="rec" title="Record this tab as a video (your backup if the live demo fails); press again to stop and save">⏺ Record</button>
   <div id="banner"></div>
   <div id="agent">
     <div class="head"><b>LoadProof</b> <span class="dim">· <span id="ordername"></span> · half-EUR pallet, 1:5 model</span>
