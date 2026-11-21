@@ -405,16 +405,17 @@ async function main() {
       xy = reach.goal(hand.image)
     }
 
-    let simDt = dt
+    // Simulated time for this frame: whole 2 ms physics steps, so the robot moves at the same pace on any screen.
+    const simDt = sim.advance(truck.running ? dt * truck.timeScale : dt)
     if (ARM_CELL) {
       // The UR10e: its controller always runs (building, holding still, or parked during the truck test).
-      if (truck.running) { simDt = dt * truck.timeScale; truck.tick(simDt) }
-      robot.tick(simDt)
+      if (truck.running) truck.tick(simDt)
+      if (simDt > 0) robot.tick(simDt)
       ring.visible = false
-      status.textContent = truck.running ? '🚚 Truck test running…' : agentBusy ? 'The UR10e is building · press Stop to stop it' : `Ready · ${HELP}`
+      const text = truck.running ? '🚚 Truck test running…' : agentBusy ? 'The UR10e is building · press Stop to stop it' : `Ready · ${HELP}`
+      if (status.textContent !== text) status.textContent = text
     } else if (truck.running) {
       // 2c. Truck test: hand parked high and open, gravity tilted by the test, slow motion during the pushes.
-      simDt = dt * truck.timeScale
       truck.tick(simDt)
       const aimT = move[2] < safe[2] - 0.02 ? [move[0], move[1], safe[2]] : safe // up first, then across
       for (let k = 0; k < 3; k++) { move[k] += 0.2 * (aimT[k] - move[k]); data.mocap_pos[k] = move[k] }

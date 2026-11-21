@@ -43,8 +43,8 @@ export async function createSim(container, { xml, labels = {}, arm = false, armX
   // three.js scene, z-up like MuJoCo.
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(0x0f1720)
-  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
-  renderer.setPixelRatio(window.devicePixelRatio)
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' })
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.setSize(container.clientWidth, container.clientHeight)
   container.appendChild(renderer.domElement)
 
@@ -72,9 +72,20 @@ export async function createSim(container, { xml, labels = {}, arm = false, armX
     renderer.setSize(container.clientWidth, container.clientHeight)
   })
 
-  // Advance the physics by `seconds` of simulated time.
+  // How much simulated time this frame gets: whole physics steps, the remainder carried to the next frame. Rounding each
+  // frame on its own made the motion judder on fast screens (144 Hz: 3 or 4 steps a frame, at random).
+  let carry = 0
+  function advance(seconds) {
+    const ts = model.opt.timestep
+    carry += seconds
+    const n = Math.floor(carry / ts + 1e-9)
+    carry -= n * ts
+    return n * ts
+  }
+
+  // Advance the physics by `seconds` of simulated time (a multiple of the timestep, from advance()).
   function step(seconds) {
-    const steps = Math.max(1, Math.round(seconds / model.opt.timestep))
+    const steps = Math.round(seconds / model.opt.timestep)
     for (let i = 0; i < steps; i++) mujoco.mj_step(model, data)
   }
 
@@ -96,7 +107,7 @@ export async function createSim(container, { xml, labels = {}, arm = false, armX
     renderer.render(scene, camera)
   }
 
-  return { mujoco, model, data, scene, camera, step, render }
+  return { mujoco, model, data, scene, camera, advance, step, render }
 }
 
 function buildMeshes(mujoco, model, scene, labels) {
