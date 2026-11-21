@@ -205,11 +205,15 @@ async function main() {
         instructions = cont.instructions
       } else if (text) {
         log('you', `“${text}”`)
-        if (globalThis.NO_AI) { instructions = text; log('info', 'No AI: your text goes to the fixed steps as instructions; the order stays as it is') }
+        // A plain list of catalogue names ("RUG, RUG, RICE") is read here, without the AI; anything else goes to Gemini.
+        const words = text.toUpperCase().split(/[\s,;]+/).filter(Boolean)
+        const list = words.length > 0 && words.every((w) => CATALOG[w])
+        if (globalThis.NO_AI && !list) { instructions = text; log('info', 'No AI: your text goes to the fixed steps as instructions; the order stays as it is') }
         else {
-          log('step', '🧠 Agent → reading the order…')
+          if (!list) log('step', '🧠 Agent → reading the order…')
           try {
-            const r = await readOrder(text)
+            const r = list ? { labels: words.slice(0, 9), instructions: '', missing: [], model: 'a list of catalogue names, no AI needed' } : await readOrder(text)
+            if (list && words.length > 9) log('info', 'At most 9 boxes on one half pallet: the first 9 are taken')
             log('ok', `Read the order (${r.model}): ${r.labels.join(', ') || 'no catalogue products'}${r.missing.length ? ` · not in the catalogue: ${r.missing.join(', ')}` : ''}`)
             if (r.instructions) log('info', `Instructions for the agent: ${r.instructions}`)
             instructions = r.instructions
