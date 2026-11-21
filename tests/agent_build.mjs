@@ -49,6 +49,13 @@ let carry = 0 // as sim.advance in the browser: whole physics steps, the remaind
     if (process.env.WATCH) { const w = process.env.WATCH, p = robot.P(w); const prev = globalThis.wp; if (prev && robot.phase.holding !== w && Math.hypot(p[0] - prev[0], p[1] - prev[1], p[2] - prev[2]) > 0.0015) console.log("         MOVED", w, prev.map((v) => v.toFixed(3)).join(","), "->", p.map((v) => v.toFixed(3)).join(","), "| goal", robot.phase.goal, "holding", robot.phase.holding, "ik", robot.phase.ikErr, robot.phase.q, "| pad", robot.S().map((v) => v.toFixed(3)).join(","), "| touch", robot.touching()); globalThis.wp = p }
     if (process.env.TOUCH && (globalThis.nt = (globalThis.nt ?? 0) + 1) % 12 === 0) { const tc = robot.touching(); if (tc && tc !== globalThis.lastTouch) console.log("         touch:", tc, "| goal", robot.phase.goal, "holding", robot.phase.holding); globalThis.lastTouch = tc }
     for (let i = 0; i < n; i++) mujoco.mj_step(model, data)
+    if (process.env.ARMZ) { // lowest height each arm part reaches, and when (ARMZ=1)
+      globalThis.armz ??= {}
+      for (const b of ['shoulder_link', 'upper_arm_link', 'forearm_link', 'wrist_1_link', 'wrist_2_link', 'wrist_3_link', 'suction']) {
+        const id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, b), z = data.xpos[3 * id + 2]
+        if (!(b in globalThis.armz) || z < globalThis.armz[b].z) globalThis.armz[b] = { z, goal: robot.phase.goal, holding: robot.phase.holding }
+      }
+    }
     await new Promise((r) => setImmediate(r))
   }
 })()
@@ -61,6 +68,7 @@ if (process.argv[2] === '--plan-file') {
   running = false
   await new Promise((r) => setTimeout(r, 50))
   for (const b of plan.blocks) { const id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, b.block); console.log(`  ${b.block} ${b.spot ?? ''} planned z ${(b.z * 100).toFixed(1)} cm, now ${(data.xpos[3 * id + 2] * 100).toFixed(1)} cm`) }
+  if (process.env.ARMZ) for (const [b, v] of Object.entries(globalThis.armz)) console.log('  lowest', b.padEnd(15), (v.z * 100).toFixed(1), 'cm  goal', v.goal, 'holding', v.holding)
   process.exit(0)
 }
 if (process.argv[2] === '--planned') {
@@ -77,6 +85,7 @@ if (process.argv[2] === '--planned') {
   running = false
   await new Promise((r) => setTimeout(r, 50))
   for (const b of plan.blocks) { const id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, b.block); console.log(`  ${b.block} planned z ${(b.z * 100).toFixed(1)} cm, now ${(data.xpos[3 * id + 2] * 100).toFixed(1)} cm`) }
+  if (process.env.ARMZ) for (const [b, v] of Object.entries(globalThis.armz)) console.log('  lowest', b.padEnd(15), (v.z * 100).toFixed(1), 'cm  goal', v.goal, 'holding', v.holding)
   process.exit(0)
 }
 let lastPlan = null

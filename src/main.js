@@ -308,10 +308,14 @@ async function main() {
     const id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY.value, victim.block)
     const v = model.jnt_dofadr[model.body_jntadr[id]]
     const out = Math.sign(victim.y - PALLET.y) || 1
+    const before = robot.P(victim.block)
     data.qvel.set([0.05, 0.45 * out, 0.15, 0, 0, 0], v) // a shove sideways, off its spot
     log('fail', `💥 Someone knocked the ${BLOCKS[victim.block].name}`)
     await new Promise((res) => setTimeout(res, 1500))
-    try { await repair(plan, { robot, log }) } catch (err) { log('fail', err.message === 'stopped' ? 'Stopped.' : 'Repair: ' + err.message) }
+    if (unwrap) { // wrapped: the film holds the box, there is nothing to repair
+      const mm = Math.round(1000 * Math.hypot(...robot.P(victim.block).map((x, k) => x - before[k])))
+      log('ok', `🎞 The stretch film held it: the ${BLOCKS[victim.block].name} moved ${mm} mm. That is why loads are wrapped before the truck.`)
+    } else try { await repair(plan, { robot, log }) } catch (err) { log('fail', err.message === 'stopped' ? 'Stopped.' : 'Repair: ' + err.message) }
     for (let k = 0; k < 3; k++) move[k] = data.mocap_pos[k]
     agentBusy = false
   }
