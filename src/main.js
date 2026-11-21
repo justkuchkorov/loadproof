@@ -10,6 +10,7 @@ import { BLOCKS, setOrder } from './planner.js'
 import { ORDER, CATALOG, PALLET, PALLET_B, sceneXml, workersStack, orderFrom, randomOrder, copyId, wrapBoxes } from './pallet.js'
 import { createTruckTest } from './truck.js'
 import * as memory from './memory.js'
+import POOL from './pool.js'
 import { openReport } from './report.js'
 
 const status = document.getElementById('status')
@@ -108,7 +109,12 @@ async function main() {
   document.getElementById('catalog').innerHTML = Object.entries(CATALOG).map(([n, c]) =>
     `<button class="chip add" data-n="${n}" title="${c.cm.join('×')} cm, ${c.kg} kg${c.fragile ? ', fragile' : ''}">+ ${n}</button>`).join('')
   document.querySelectorAll('#catalog [data-n]').forEach((el) => { el.onclick = () => { if (draft.length < 9) { draft.push(el.dataset.n); showDraft() } } })
-  document.getElementById('random').onclick = () => { draft = randomOrder(); showDraft() }
+  // 🎲 picks from orders known to be stackable (tests/make_pool.mjs); boxes in a random arrival order.
+  document.getElementById('random').onclick = () => {
+    draft = [...POOL[Math.floor(Math.random() * POOL.length)]]
+    for (let i = draft.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [draft[i], draft[j]] = [draft[j], draft[i]] }
+    showDraft()
+  }
   document.getElementById('demo').onclick = () => { location.hash = ''; location.reload() }
   document.getElementById('load').onclick = () => {
     if (draft.length === 0) return
@@ -393,7 +399,8 @@ async function main() {
       // 2c. Truck test: hand parked high and open, gravity tilted by the test, slow motion during the pushes.
       simDt = dt * truck.timeScale
       truck.tick(simDt)
-      for (let k = 0; k < 3; k++) { move[k] += 0.15 * (safe[k] - move[k]); data.mocap_pos[k] = move[k] }
+      const aimT = move[2] < safe[2] - 0.02 ? [move[0], move[1], safe[2]] : safe // up first, then across
+      for (let k = 0; k < 3; k++) { move[k] += 0.2 * (aimT[k] - move[k]); data.mocap_pos[k] = move[k] }
       for (let i = 0; i < model.nu; i++) data.ctrl[i] = 0
       ring.visible = false
       status.textContent = '🚚 Truck test running…'
@@ -403,8 +410,10 @@ async function main() {
       ring.visible = false
       status.textContent = `The robot is building · press Stop to take over`
     } else if (parked && !hand) {
-      // Parked (at the start, after a reset or a truck test): stay up and out of the way.
-      for (let k = 0; k < 3; k++) { move[k] += 0.15 * (safe[k] - move[k]); data.mocap_pos[k] = move[k] }
+      // Parked (at the start, after a reset or a truck test): straight up first, then across — never through a stack.
+      const up = move[2] < safe[2] - 0.02
+      const aim = up ? [move[0], move[1], safe[2]] : safe
+      for (let k = 0; k < 3; k++) { move[k] += 0.2 * (aim[k] - move[k]); data.mocap_pos[k] = move[k] }
       for (let i = 0; i < model.nu; i++) data.ctrl[i] = 0
       ring.visible = false
       status.textContent = `Ready · ${HELP}`

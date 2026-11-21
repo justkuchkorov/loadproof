@@ -58,7 +58,8 @@ export function randomOrder(rand = Math.random) {
       const shape = L === 0 ? pick(LAYERS.filter((s) => s.includes('wide'))) : L === 1 && !top ? pick(LAYERS.filter((s) => s.includes('long'))) : pick(LAYERS)
       const layer = []
       for (const kind of shape) {
-        const options = Object.keys(CATALOG).filter((n) => footprint(n) === kind && (top || !CATALOG[n].fragile) && CATALOG[n].kg <= 1.5 * below)
+        const minKg = L === 0 ? 10 : top ? 0 : 3 // a heavy base: light, bulky boxes at the bottom make a top-heavy pallet
+        const options = Object.keys(CATALOG).filter((n) => footprint(n) === kind && (top || !CATALOG[n].fragile) && CATALOG[n].kg <= 1.5 * below && CATALOG[n].kg >= minKg)
         if (options.length === 0) { ok = false; break }
         const fresh = options.filter((n) => labels.concat(layer).filter((m) => m === n).length < 2) // variety: each type at most twice
         layer.push(pick(fresh.length ? fresh : options))

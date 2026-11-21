@@ -17,7 +17,8 @@ for (const f of ['shadow_hand/hand_free.xml', ...fs.readdirSync(models + 'shadow
 const n = Number(process.argv[2] || 6)
 let passed = 0
 for (let k = 1; k <= n; k++) {
-  const labels = process.env.ORDER ? process.env.ORDER.split(",") : randomOrder()
+  const POOL = (await import('../src/pool.js')).default
+  const labels = process.env.ORDER ? process.env.ORDER.split(',') : process.env.POOL ? POOL[Math.floor(Math.random() * POOL.length)] : randomOrder()
   const order = orderFrom(labels)
   setOrder(order)
   mujoco.FS.writeFile('/w/shadow_hand/scene.xml', sceneXml(order))

@@ -71,7 +71,14 @@ export async function runAgent({ request, mujoco, model, robot, log, preview, re
 
   // Second opinion, no AI: search every arrangement of layers and spots.
   log('step', 'Second opinion: searching every arrangement (no AI)…')
-  const { found, tried } = search({ maxLayers: 4, limit: 30 })
+  const { found, tried } = search({ maxLayers: 4, limit: 60 })
+  // Prefer even layers: boxes of one layer with the same height are what a robot builds cleanly.
+  const unevenness = (raw) => {
+    const byLayer = {}
+    for (const b of raw.boxes) (byLayer[b.layer] ??= []).push(BLOCKS[b.block].size[2])
+    return Object.values(byLayer).reduce((s, hs) => s + (Math.max(...hs) - Math.min(...hs)), 0) + 0.001 * Object.keys(byLayer).length
+  }
+  found.sort((x, y) => unevenness(x) - unevenness(y))
   for (const raw of found) {
     const { plan: p } = toPositions(raw)
     if (!checkPhysics(mujoco, model, p).stands || !checkTransport(mujoco, model, p, 0.5).pass) continue
@@ -105,6 +112,13 @@ export async function runAgent({ request, mujoco, model, robot, log, preview, re
       : '💡 Even without any single box it does not work. Split the order over two pallets.')
   } else {
     log('fail', `${found.length} arrangements pass the rules, but none of them passes the truck test unwrapped.`)
+    // As in a real warehouse: would stretch wrap make the best of them pass?
+    for (const raw of found.slice(0, 10)) {
+      const { plan: p } = toPositions(raw)
+      if (!checkPhysics(mujoco, model, p).stands) continue
+      const t = checkTransport(mujoco, model, p, 0.5, { wrap: true })
+      if (t.pass) { log('info', `🎞 With stretch wrap one of them passes (worst ${mm(Math.max(...t.results.map((r) => r.worst)))} mm, limit ${mm(t.limit)} mm). Recommendation: wrap this pallet, or move the lightest, tallest boxes to another pallet.`); break }
+    }
   }
   log('fail', 'Nothing was built.')
   // Last resort, as in a real warehouse: would stretch wrap make the best plan pass?
@@ -146,6 +160,9 @@ export async function build(plan, { robot, log, reset, feed }) {
     placed.push(b)
   }
   await robot.home()
+  // Final check: measure every box once more. A box knocked while placing a later one is found and put back.
+  log('step', 'Final check: measuring every box against the plan')
+  await repair(plan, { robot, log })
 }
 
 // Layer by layer; inside a layer the NEAR row first, inside a row the RIGHT box first (see build()).

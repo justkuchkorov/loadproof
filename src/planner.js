@@ -24,7 +24,8 @@ The pallet has 4 spots per layer: near-left, near-right, far-left, far-right.
 - A small box fills ONE spot: say "near-left", "near-right", "far-left" or "far-right".
 - A wide box fills the near AND far spot of one side: say "left column" or "right column".
 - A long box fills the left AND right spot of one row: say "near row" or "far row".
-Give every box a layer number (1 = on the pallet) and a spot. Within a layer, spots must not overlap.
+Answer with three lists — smallBoxes, wideBoxes, longBoxes — each box in the list of its kind, with a layer number
+(1 = on the pallet) and a spot that fits its kind. Within a layer, spots must not overlap.
 Rules:
 1. Every box must stand on boxes below it (the layer below must be filled under it).
 2. A box never rests on one that is much lighter (more than 1.5 times lighter). Nothing rests on a fragile box.
@@ -35,24 +36,28 @@ List the boxes in build order, layer 1 first. Give the plan a short name and tel
 }
 
 const SPOT_NAMES = [...new Set(Object.values(SPOTS).flatMap((s) => Object.keys(s)))]
-const SCHEMA = () => ({
-  type: 'OBJECT',
-  properties: {
-    name: { type: 'STRING' },
-    boxes: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
-      block: { type: 'STRING', enum: Object.keys(BLOCKS) },
+const KIND_LIST = { small: 'smallBoxes', wide: 'wideBoxes', long: 'longBoxes' }
+const SCHEMA = () => {
+  const list = (kind) => {
+    const ids = Object.keys(BLOCKS).filter((id) => BLOCKS[id].kind === kind)
+    return { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+      block: { type: 'STRING', enum: ids.length ? ids : ['none'] },
       layer: { type: 'INTEGER' },
-      spot: { type: 'STRING', enum: SPOT_NAMES } },
-      required: ['block', 'layer', 'spot'] } },
-    say: { type: 'STRING' },
-  },
-  required: ['name', 'boxes', 'say'],
-})
+      spot: { type: 'STRING', enum: Object.keys(SPOTS[kind]) } },
+      required: ['block', 'layer', 'spot'] } }
+  }
+  return {
+    type: 'OBJECT',
+    properties: { name: { type: 'STRING' }, smallBoxes: list('small'), wideBoxes: list('wide'), longBoxes: list('long'), say: { type: 'STRING' } },
+    required: ['name', 'smallBoxes', 'wideBoxes', 'longBoxes', 'say'],
+  }
+}
 
 // Turn the AI's layers and spots into positions. A spot that does not fit the box's kind is reported as a problem.
 export function toPositions(raw) {
   const problems = []
-  const boxes = [...raw.boxes].sort((a, b) => a.layer - b.layer)
+  const all = raw.boxes ?? [...(raw.smallBoxes ?? []), ...(raw.wideBoxes ?? []), ...(raw.longBoxes ?? [])].filter((b) => b.block !== 'none')
+  const boxes = [...all].sort((a, b) => a.layer - b.layer)
   const blocks = []
   for (const b of boxes) {
     const box = BLOCKS[b.block]
