@@ -12,6 +12,10 @@ const PUSHES = [
   { name: 'swerve', dir: [0, -1] }, // the load is pushed to the right of the screen
   { name: 'brake', dir: [1, 0] },   // the load is pushed forward
 ]
+// Road values of EN 12195-1: braking up to 0.8 g, sideways (swerving) 0.5 g. The slider sets the braking; the swerve
+// never goes above 0.5 g (a loaded truck would tip over first).
+const SWERVE_MAX = 0.5
+const accelOf = (push, accel) => (push.name === 'swerve' ? Math.min(accel, SWERVE_MAX) : accel)
 const PUSH_TIME = 0.6
 const SETTLE_TIME = 1.2
 const PARK_TIME = 1.5 // first the hand moves away and everything goes still; nothing may touch the load
@@ -41,7 +45,7 @@ export function createTruckTest({ mujoco, model, data, scene, log }) {
     if (groups.length === 0) { log('fail', 'Truck test: nothing on a pallet to test'); return false }
     for (const g of groups) g.height = Math.max(...g.names.map((n) => P(n)[2] + sizeOf(n)[2] / 2))
     run = { t: 0, step: -1, before: null, groups, accel }
-    log('step', `🚚 Truck test at ${accel} g: robot parked, then ${PUSHES.map((p) => p.name).join(', then ')} (${groups.map((g) => `${g.name} ${(g.height * 100 * 5).toFixed(0)} cm tall`).join('; ')})`)
+    log('step', `🚚 Truck test: robot parked, then ${PUSHES.map((p) => `${p.name} at ${accelOf(p, accel)} g`).join(', then ')} (${groups.map((g) => `${g.name} ${(g.height * 100 * 5).toFixed(0)} cm tall`).join('; ')})`)
     return true
   }
 
@@ -57,7 +61,8 @@ export function createTruckTest({ mujoco, model, data, scene, log }) {
     }
     const push = PUSHES[run.step]
     const pushing = run.t < PUSH_TIME
-    model.opt.gravity.set(pushing ? [push.dir[0] * run.accel * G, push.dir[1] * run.accel * G, -G] : normal)
+    const a = accelOf(push, run.accel)
+    model.opt.gravity.set(pushing ? [push.dir[0] * a * G, push.dir[1] * a * G, -G] : normal)
     arrow.visible = pushing
     if (pushing) arrow.setDirection(new THREE.Vector3(push.dir[0], push.dir[1], 0))
     if (run.t >= PUSH_TIME + SETTLE_TIME) { run.step++; run.t = 0 }
@@ -87,7 +92,7 @@ export function createTruckTest({ mujoco, model, data, scene, log }) {
     forget() { last = null },
     get timeScale() { return run && run.step >= 0 ? SLOW : 1 },
     // What is happening now, for the banner and the shake: null, or { name, accel, pushing }
-    get phase() { return run && run.step >= 0 ? { name: PUSHES[run.step]?.name, accel: run.accel, pushing: run.t < PUSH_TIME, dir: PUSHES[run.step]?.dir } : null },
+    get phase() { return run && run.step >= 0 ? { name: PUSHES[run.step]?.name, accel: PUSHES[run.step] ? accelOf(PUSHES[run.step], run.accel) : run.accel, pushing: run.t < PUSH_TIME, dir: PUSHES[run.step]?.dir } : null },
     cancel() { run = null; model.opt.gravity.set(normal); arrow.visible = false },
   }
 }

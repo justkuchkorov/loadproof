@@ -55,7 +55,7 @@ ${agent ? `<h2>Securing</h2><table>
 <tr><td>Stretch wrap</td><td>${agent.wrapped ? 'yes (the agent decided)' : 'no'}</td></tr>
 ${agent.straps ? `<tr><td>Top-over straps (EN 12195-1, for ${agent.straps.kg} kg incl. a 10 kg pallet, ${agent.straps.assumptions.H} m tall; friction ${agent.straps.assumptions.mu} assumed, straps of ${agent.straps.assumptions.ftKN * 100} daN)</td><td><b>${agent.straps.straps}</b></td></tr>` : ''}
 ${agent.instructions ? `<tr><td>Instructions the agent followed</td><td>${esc(agent.instructions)}</td></tr>` : ''}</table>` : ''}
-${truck ? `<h2>Truck test on the built pallet (${truck.accel} g, swerve then brake)</h2><table><tr><th>Pallet</th><th>Largest movement</th><th>Limit</th><th></th></tr>${truckRows}</table>` : ''}
+${truck ? `<h2>Truck test on the built pallet (swerve at ${Math.min(truck.accel, 0.5)} g, then brake at ${truck.accel} g)</h2><table><tr><th>Pallet</th><th>Largest movement</th><th>Limit</th><th></th></tr>${truckRows}</table>` : ''}
 <p class="dim" style="margin-top:22px">Method: the 0.5 g load test follows the idea of EUMOS 40509 (a constant push of 0.5 g, permanent shift at most 5% of the load height),
 run in the MuJoCo physics engine on a 1:5 scale model with box friction 0.6 (anti-slip sheets); hard braking uses the road values of EN 12195-1 (0.8 g forward, 0.5 g sideways). Sizes are real sizes. This is a planning check, not a certification.</p>
 <button onclick="print()">Print / save as PDF</button>
