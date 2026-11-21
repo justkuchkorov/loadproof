@@ -36,7 +36,8 @@ const remoteRelay = {
           }
           db.boxes.push(clean)
         }
-        if (action === 'delete') db.boxes = db.boxes.filter((b) => b.n !== n)
+        // after a delete the numbers close up (1, 2, 3 …, as printed on new labels); an old sheet would point at old numbers
+        if (action === 'delete') { db.boxes = db.boxes.filter((b) => b.n !== n).map((b, i) => ({ ...b, n: i + 1 })); db.next = db.boxes.length + 1; db.sheet = null }
         if (action === 'clear') { db.boxes = []; db.next = 1; db.sheet = null }
         save(db)
         server.hot.send('boxes:changed', {})
