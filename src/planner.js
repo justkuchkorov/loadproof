@@ -202,28 +202,30 @@ export function checkPhysics(mujoco, model, plan) {
 // Pass: every box moved less than 5% of the load's height.
 export const PUSH_DIRECTIONS = [['to the right', [0, -1]], ['to the left', [0, 1]], ['forward (braking)', [1, 0]], ['backward', [-1, 0]]]
 export function checkTransport(mujoco, model, plan, g = 0.5, { wrap = false } = {}) {
+  // One stack, the four pushes one after another (as a truck swerves, brakes and speeds up on one trip, and as the
+  // 🚚 button shows it): small shifts add up. Each push 0.6 s, then 1.2 s to settle, like the live test.
   const height = Math.max(...plan.blocks.map(top))
   const limit = 0.05 * height
   const gravity = Array.from(model.opt.gravity)
   const results = []
-  for (const [name, dir] of PUSH_DIRECTIONS) {
-    const { d, pos } = worldWith(mujoco, model, plan)
-    try {
-      run(mujoco, model, d, 0.5)
-      if (wrap) wrapBoxes(mujoco, model, d, plan.blocks.map((b) => b.block))
-      const before = plan.blocks.map((b) => pos(b.block))
+  const { d, pos } = worldWith(mujoco, model, plan)
+  try {
+    run(mujoco, model, d, 0.5)
+    if (wrap) wrapBoxes(mujoco, model, d, plan.blocks.map((b) => b.block))
+    const before = plan.blocks.map((b) => pos(b.block))
+    for (const [name, dir] of PUSH_DIRECTIONS) {
       const gd = typeof g === 'number' ? g : name.startsWith('forward') ? g.forward : g.other
       model.opt.gravity.set([dir[0] * gd * 9.81, dir[1] * gd * 9.81, -9.81]) // inside the truck, the push feels like tilted gravity
-      run(mujoco, model, d, 0.5)
+      run(mujoco, model, d, 0.6)
       model.opt.gravity.set(gravity)
-      run(mujoco, model, d, 1.0)
-      const moved = plan.blocks.map((b, i) => Math.hypot(...pos(b.block).map((v, k) => v - before[i][k])))
+      run(mujoco, model, d, 1.2)
+      const moved = plan.blocks.map((b, i) => Math.hypot(...pos(b.block).map((v, k) => v - before[i][k]))) // from the start
       const worst = Math.max(...moved)
       results.push({ name, worst, pass: worst < limit, block: plan.blocks[moved.indexOf(worst)].block })
-    } finally {
-      model.opt.gravity.set(gravity)
-      d.delete()
     }
+  } finally {
+    model.opt.gravity.set(gravity)
+    d.delete()
   }
   return { pass: results.every((r) => r.pass), limit, height, results }
 }

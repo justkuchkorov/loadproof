@@ -8,14 +8,17 @@ import { BLOCKS, checkRules } from './planner.js'
 import { PALLET, PALLET_B, copyId } from './pallet.js'
 
 const G = 9.81
+// All four directions, as in the EU test (EUMOS 40509) the agent runs: a weak side must not escape the test.
 const PUSHES = [
-  { name: 'swerve', dir: [0, -1] }, // the load is pushed to the right of the screen
-  { name: 'brake', dir: [1, 0] },   // the load is pushed forward
+  { name: 'swerve right', dir: [0, -1] }, // the load is pushed to the right of the screen
+  { name: 'swerve left', dir: [0, 1] },
+  { name: 'brake', dir: [1, 0] },          // the load is pushed forward
+  { name: 'speed up', dir: [-1, 0] },      // the load is pushed backward
 ]
-// Road values of EN 12195-1: braking up to 0.8 g, sideways (swerving) 0.5 g. The slider sets the braking; the swerve
-// never goes above 0.5 g (a loaded truck would tip over first).
-const SWERVE_MAX = 0.5
-const accelOf = (push, accel) => (push.name === 'swerve' ? Math.min(accel, SWERVE_MAX) : accel)
+// Road values of EN 12195-1: braking up to 0.8 g, sideways and backward 0.5 g. The slider sets the braking; the
+// others never go above 0.5 g (a loaded truck would tip over, or could not speed up that hard).
+const OTHER_MAX = 0.5
+const accelOf = (push, accel) => (push.name === 'brake' ? accel : Math.min(accel, OTHER_MAX))
 const PUSH_TIME = 0.6
 const SETTLE_TIME = 1.2
 const PARK_TIME = 1.5 // first the hand moves away and everything goes still; nothing may touch the load

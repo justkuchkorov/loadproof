@@ -549,7 +549,7 @@ async function main() {
 
     const phase = truck.phase
     banner.style.display = phase ? 'block' : 'none'
-    if (phase) banner.textContent = phase.pushing ? `🚚 ${phase.name === 'brake' ? 'BRAKING' : 'SWERVING'} · ${phase.accel} g · slow motion` : '🚚 settling…'
+    if (phase) banner.textContent = phase.pushing ? `🚚 ${{ brake: 'BRAKING', 'speed up': 'SPEEDING UP' }[phase.name] ?? 'SWERVING'} · ${phase.accel} g · slow motion` : '🚚 settling…'
     if (phase?.pushing) { // the whole world shakes a little, like the truck bed
       const a = 0.004 * Math.sin(now / 18)
       sim.scene.position.set(phase.dir[0] * a, phase.dir[1] * a, 0.0015 * Math.sin(now / 11))

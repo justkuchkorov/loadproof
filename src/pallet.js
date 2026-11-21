@@ -150,14 +150,16 @@ export function sceneXml(order = ORDER) {
     const [x, y] = stagingSpots(order)[b.id]
     const z0 = CELL === 'arm' ? INFEED_Z : 0 // waiting on the infeed table
     return `    <body name="${b.id}" pos="${x.toFixed(3)} ${y.toFixed(3)} ${(z0 + sz / 2).toFixed(4)}"><freejoint/>` +
-      `<geom name="${b.id}" class="box" type="box" size="${sx / 2} ${sy / 2} ${sz / 2}" mass="${mass(b).toFixed(4)}" rgba="${COLORS[b.fragile]}"/></body>`
+      `<geom name="${b.id}" class="box" type="box" contype="2" conaffinity="3" size="${sx / 2} ${sy / 2} ${sz / 2}" mass="${mass(b).toFixed(4)}" rgba="${COLORS[b.fragile]}"/></body>`
   }).join('\n')
-  // Copies (c1..cn) for the comparison pallet; they wait under the floor until "Compare" places them.
+  // Copies (c1..cn) for the comparison pallet; they wait under the floor until "Compare" places them. Boxes and copies
+  // never touch each other (contype/conaffinity bits: boxes 2, copies 4, both touch the cell 1): in Compare a
+  // collapsing pallet must not knock the other one over, as if each stood in its own truck.
   const copies = order.map((b, i) => {
     const [sx, sy, sz] = size(b)
     const id = copyId(b.id)
     return `    <body name="${id}" pos="${(-1.6 - i * 0.3).toFixed(3)} 0 ${(-0.75 + sz / 2).toFixed(4)}"><freejoint/>` +
-      `<geom name="${id}" class="box" type="box" size="${sx / 2} ${sy / 2} ${sz / 2}" mass="${mass(b).toFixed(4)}" rgba="${COLORS[b.fragile]}"/></body>`
+      `<geom name="${id}" class="box" type="box" contype="4" conaffinity="5" size="${sx / 2} ${sy / 2} ${sz / 2}" mass="${mass(b).toFixed(4)}" rgba="${COLORS[b.fragile]}"/></body>`
   }).join('\n')
   const arm = CELL === 'arm'
   const grips = order.map((b) => `    <weld name="grip_${b.id}" body1="${arm ? 'suction' : 'rh_palm'}" body2="${b.id}" active="false"/>`).join('\n')
