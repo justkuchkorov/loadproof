@@ -9,6 +9,7 @@ import { runAgent, checkPlan } from './agent.js'
 import { BLOCKS, setOrder } from './planner.js'
 import { ORDER, CATALOG, PALLET, PALLET_B, sceneXml, workersStack, orderFrom, randomOrder, copyId } from './pallet.js'
 import { createTruckTest } from './truck.js'
+import * as memory from './memory.js'
 
 const status = document.getElementById('status')
 const startButton = document.getElementById('start')
@@ -114,6 +115,21 @@ async function main() {
   document.getElementById('edit').onclick = () => { document.getElementById('editor').classList.toggle('open') }
   showDraft()
 
+  // Memory: plans tested, failed, lessons learned.
+  const names = Object.fromEntries(order.map((b) => [b.id, b.label]))
+  const labelsOfOrder = order.map((b) => b.label)
+  function showMemory() {
+    const s = memory.stats()
+    document.getElementById('memstats').textContent = `🧠 Memory: ${s.tested} plan${s.tested === 1 ? '' : 's'} tested · ${s.failed} failed · ${s.lessons} lesson${s.lessons === 1 ? '' : 's'}`
+    document.getElementById('lessons').innerHTML = memory.lessons().map((l) => `<li>${l.text} <span class="dim">(${l.count}×)</span></li>`).join('') || '<li class="dim">No lessons yet.</li>'
+  }
+  const remember = (source) => (plan, c) => {
+    memory.record({ labels: labelsOfOrder, names, plan, pass: c.pass, feedback: c.feedback ?? '', source })
+    showMemory()
+  }
+  document.getElementById('forget').onclick = () => { memory.forget(); showMemory() }
+  showMemory()
+
   // Put a plan's boxes straight on the pallet (used when the robot build is switched off, and for the rushed stack).
   function place(plan) {
     for (const b of plan.blocks) {
@@ -147,9 +163,10 @@ async function main() {
     buildButton.disabled = true
     logEl.innerHTML = ''
     log('you', notes ? `LoadProof plan · “${notes}”` : 'LoadProof plan')
+    if (memory.stats().lessons) log('info', `🧠 Sent the AI ${memory.stats().lessons} lessons from ${memory.stats().tested} earlier checked plans`)
     try {
       const useRobot = document.getElementById('userobot').checked
-      const plan = await runAgent({ request, mujoco, model, robot, log, preview, reset, place: useRobot ? null : place })
+      const plan = await runAgent({ request: request + memory.promptText(labelsOfOrder), mujoco, model, robot, log, preview, reset, place: useRobot ? null : place, onChecked: remember('AI') })
       if (plan) lastGoodPlan = plan
     } catch (err) {
       log('fail', err.message === 'stopped' ? 'Stopped. Your hand is in charge again.' : 'Error: ' + err.message)
@@ -183,7 +200,7 @@ async function main() {
     log('you', 'Compare: rushed worker (right) against LoadProof (left), same boxes')
     try {
       if (!lastGoodPlan) {
-        lastGoodPlan = await runAgent({ request: 'Plan the pallet for this order so it passes the 0.5 g truck test.', mujoco, model, robot, log, preview, reset, place: () => {} })
+        lastGoodPlan = await runAgent({ request: 'Plan the pallet for this order so it passes the 0.5 g truck test.' + memory.promptText(labelsOfOrder), mujoco, model, robot, log, preview, reset, place: () => {}, onChecked: remember('AI') })
         preview(null)
       }
       if (!lastGoodPlan) throw new Error('no LoadProof plan passed the checks')
@@ -207,7 +224,8 @@ async function main() {
     const plan = workersStack(order)
     place(plan)
     log('you', 'Rushed worker: boxes in the order they arrived, in columns')
-    checkPlan(plan, { mujoco, model, log, preview: () => {} }, [], { all: true })
+    const c = checkPlan(plan, { mujoco, model, log, preview: () => {} }, [], { all: true })
+    remember('rushed worker')(plan, { pass: false, feedback: [...document.querySelectorAll('#log li.fail')].map((li) => li.textContent).join('; ') })
     log('info', 'It is standing on the table right now. Press 🚚 Truck test to see what the truck does to it.')
   }
   ask.addEventListener('keydown', (e) => { if (e.key === 'Enter') startBuild() })
@@ -253,6 +271,7 @@ async function main() {
   if (auto) { ask.value = auto; startBuild() }
   if (new URLSearchParams(location.search).has('worker')) document.getElementById('worker').click()
   if (new URLSearchParams(location.search).has('compare')) document.getElementById('compare').onclick().then(() => { if (new URLSearchParams(location.search).has('truck')) document.getElementById('truck').click() })
+  if (new URLSearchParams(location.search).has('memopen')) document.getElementById('memory').open = true
   if (new URLSearchParams(location.search).has('editor')) document.getElementById('editor').classList.add('open')
 
   let last = performance.now()

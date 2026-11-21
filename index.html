@@ -35,6 +35,9 @@
     #random, #demo, #load { flex: 1; background: #30363d; }
     #load { background: #1f6feb; }
     .toggle { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+    #memory { margin-top: 6px; font-size: 12px; }
+    #memory summary { cursor: pointer; color: #d2a8ff; }
+    #lessons { margin: 4px 0; padding-left: 18px; }
     #banner { display: none; position: fixed; top: 64px; left: 50%; transform: translateX(-50%); padding: 10px 22px; background: #9e6a03; color: #fff; font-size: 22px; font-weight: 700; border-radius: 8px; letter-spacing: 0.5px; box-shadow: 0 4px 20px #0008; }
     #log { list-style: none; margin: 8px 0 0; padding: 0; max-height: 34vh; overflow-y: auto; font-size: 13px; line-height: 1.45; }
     #log:empty { display: none; }
@@ -81,6 +84,10 @@
       <button id="compare" title="Rushed stack on the right pallet, LoadProof plan on the left, same boxes, placed at once">⚖️ Compare</button>
       <button id="truck" title="Push the load at 0.5 g, like a truck braking or swerving (after the EU test EUMOS 40509)">🚚 Truck test (0.5 g)</button>
     </div>
+    <details id="memory"><summary id="memstats">🧠 Memory</summary>
+      <ul id="lessons"></ul>
+      <button id="forget" class="link">forget everything</button>
+    </details>
     <ul id="log"></ul>
   </div>
   <div id="camwrap">

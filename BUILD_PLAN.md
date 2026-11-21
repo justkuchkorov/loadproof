@@ -24,7 +24,7 @@ later. He sleeps; the laptop stays plugged in with the lid OPEN (closing it slee
       checked plan at once; the robot build stays available (warn that the tested build is the demo order).
 - [x] 2. Side by side: a second pallet. "Compare" puts the rushed stack on one pallet and the LoadProof plan on the
       other (placed at once), then one truck test shakes both; the result names both.
-- [ ] 3. Lessons learned: every checked plan is saved in the browser (order, plan, result, why it failed). The
+- [x] 3. Lessons learned: every checked plan is saved in the browser (order, plan, result, why it failed). The
       lessons go into the AI prompt. The panel shows "plans tested / failed / lessons".
 - [ ] 4. Sabotage: a "Knock a box" button pushes one box of the finished pallet off; the robot measures the whole
       pallet, finds what moved and puts it back.
