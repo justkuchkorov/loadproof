@@ -25,8 +25,9 @@ x = x.replace(/ damping="([^"]+)"/g, (m, v) => ` damping="${nums(v, s ** 4.5)}"`
 x = x.replace(/ gainprm="([^"]+)"/g, (m, v) => ` gainprm="${nums(v, s ** 4)}"`)
 x = x.replace(/ biasprm="([^"]+)"/g, (m, v) => ` biasprm="${nums(v, s ** 4)}"`)
 x = x.replace(/ forcerange="([^"]+)"/g, (m, v) => ` forcerange="${nums(v, s ** 4)}"`)
-// meshes are in metres at full size
-x = x.replace('<material specular="0.5" shininess="0.25"/>', `<material specular="0.5" shininess="0.25"/>\n      <mesh scale="${s} ${s} ${s}"/>`)
+// meshes are in metres at full size: scale each one (a class default does not reach them, they use the main class)
+x = x.replace(/<mesh file="([^"]+)"\/>/g, `<mesh file="$1" scale="${s} ${s} ${s}"/>`)
+if ((x.match(/<mesh file="[^"]+" scale="/g) || []).length !== 20) throw new Error('expected 20 scaled meshes')
 // every arm body is gravity-compensated, as cobot controllers do
 x = x.replace(/<body name="([^"]+)"/g, '<body name="$1" gravcomp="1"')
 // the vacuum gripper on the tool flange: a body at the attachment site, a pad, and the grasp point at the pad face
