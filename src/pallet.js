@@ -5,7 +5,7 @@ export const SCALE = 5
 export const PALLET = { x: 0.26, y: 0, sx: 0.12, sy: 0.16, top: 0.029 } // centre and size in metres; top surface height
 export const PALLET_B = { ...PALLET, y: -0.4 } // the comparison pallet, on the right (clear of the robot's reach)
 // The robot cell: a UR10e on a pedestal behind the pallet (base centre and height), and where its pad waits.
-export const ARM = { base: [0.40, 0, 0.2], park: [0.5, 0.08, 0.3] } // pedestal 1 m tall in real size
+export const ARM = { base: [0.40, 0, 0.2], park: [0.31, 0, 0.32] } // pedestal 1 m tall in real size; parked in front, over the pallet side
 // The raised infeed table round the robot (a U, the pallet in its notch), where the boxes of the order wait:
 // at waist height (50 cm real), like a conveyor's end. [x0, x1, y0, y1], top height INFEED_Z.
 export const INFEED_Z = 0.1

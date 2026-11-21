@@ -168,9 +168,11 @@ export function createArm({ mujoco, model, data, debug = () => {}, eye = null })
   async function moveTo(xyz) {
     const a = goal.slice()
     // Angles measured from straight behind the robot (0 .. 2 pi): the arm never turns through the direction behind
-    // it, so its base joint never winds up against its limit (+-360 degrees).
+    // it, so its base joint (and the wrist that keeps the box square) never winds up against its limit (+-360
+    // degrees). The robot parks in front, over the pallet side, so from there every box is less than half a turn away.
     const around = (p) => { const [t, r] = polar(p); return [((t % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI), r] }
     const [ta, ra] = around(a), [tb, rb] = around(xyz)
+    if (Math.abs(tb - ta) > 3.3) debug(`long way round: ${((tb - ta) * 180 / Math.PI).toFixed(0)} degrees`)
     const len = Math.abs(tb - ta) * Math.max(ra, rb) + Math.abs(rb - ra)
     const n = Math.max(2, Math.ceil(len / 0.01))
     const xy = Array.from({ length: n + 1 }, (_, i) => {
