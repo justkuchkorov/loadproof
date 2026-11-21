@@ -9,14 +9,16 @@ const { createTools } = await import('../src/loadagent.js')
 const mujoco = await loadMujoco()
 const mm = (v) => Math.round(v * 5000)
 for (const arg of process.argv.slice(2)) {
-  const labels = arg.split(',')
-  const order = orderFrom(labels)
+  // an argument starting with [ is a JSON list of your own boxes (as on boxes.html)
+  const own = arg.startsWith('[') ? JSON.parse(arg).map((b, i) => ({ id: `b${i + 1}`, label: b.name, kg: b.kg, fragile: b.firmness === 'soft', firmness: b.firmness, cm: b.cm })) : null
+  const labels = own ? own.map((b) => b.label) : arg.split(',')
+  const order = own ?? orderFrom(labels)
   setOrder(order)
   const { model } = await loadScene(mujoco, order)
-  const kg = labels.reduce((s, l) => s + CATALOG[l].kg, 0)
-  const over = labels.filter((l) => CATALOG[l].kg > 12.5)
+  const kg = order.reduce((s, b) => s + b.kg, 0)
+  const over = order.filter((b) => b.kg > 12.5).map((b) => b.label)
   const { tools } = createTools({ mujoco, model, robot: null, log: () => {}, preview: () => {}, reset: () => {}, place: null, wrap: () => {} })
-  let line = `${arg} (${kg} kg${over.length ? `, over the UR10e payload: ${over.join(' ')}` : ''}): `
+  let line = `${own ? labels.join(',') : arg} (${kg} kg${over.length ? `, over the UR10e payload: ${over.join(' ')}` : ''}): `
   let chosen = null, how = ''
   const skip = []
   for (let k = 0; k < 8 && !chosen; k++) {

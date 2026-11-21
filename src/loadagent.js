@@ -73,7 +73,19 @@ export function createTools({ mujoco, model, robot, log, preview, reset, place, 
         candidates = found
         log('info', `Search: ${found.length} arrangements pass the warehouse rules (of ${tried} tried)`)
       }
-      if (!candidates.length) return { error: 'No arrangement of this order passes the warehouse rules on one half pallet. Some boxes need a second pallet.' }
+      if (!candidates.length) {
+        // Which single box, put on a second pallet, lets the rest stack safely? (try leaving each one out)
+        const all = Object.entries(BLOCKS), helps = []
+        for (const [id, box] of all) {
+          delete BLOCKS[id]
+          if (search({ maxLayers: 4, limit: 1 }).found.length) helps.push(box.name)
+          for (const k of Object.keys(BLOCKS)) delete BLOCKS[k]
+          for (const [k, v] of all) BLOCKS[k] = v // restore, in the original order
+        }
+        const advice = helps.length ? `It works without one of these: ${[...new Set(helps)].join(', ')} — put it on a second pallet.` : 'Even without any single box it does not work: split the order over two pallets.'
+        log('fail', `No safe stacking for this order on one half pallet. 💡 ${advice}`)
+        return { error: `No arrangement of this order passes the warehouse rules on one half pallet. ${advice}` }
+      }
       const top = keep_on_top.map((s) => String(s).toUpperCase())
       for (let i = 0; i < candidates.length; i++) {
         if (skip.includes(i)) continue
